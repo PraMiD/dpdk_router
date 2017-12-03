@@ -32,35 +32,35 @@
  *  Static structure definitions  *
  **********************************/
 typedef struct routing_table_line {
-    uint32_t dip;
-    uint8_t prf;
+    uint32_t dst_net;
+    uint32_t netmask;
     struct routing_table_entry rte;
-} routing_table_line;
+    struct routing_table_line *nxt;
+} routing_table_line_t;
 
 typedef struct intf_config {
     uint8_t intf;
     uint32_t ip_addr;
-} intf_config;
-
-typedef struct list_node {
-    void *data;
-    struct list_node *nxt;
-} list_node;
+    struct intf_config *nxt;
+} intf_config_t;
 
 
 /**********************************
  *  Static function declarations  *
  **********************************/
 static int parse_install_route(const char *route);
+static int install_route(uint32_t ip_addr, uint8_t prefix,
+                     uint8_t port, struct ether_addr* mac_addr);
 static int parse_intf_dev(const char *def);
-static int add_intf_config(intf_config *new_config);
+static int add_intf_config(uint8_t intf, uint32_t ip_addr);
 static int parse_mac(const char *s_mac, struct ether_addr *mac);
 static void print_help();
 
 /**********************************
  *       Lists and Fields         *
  **********************************/
-list_node *intf_defs = NULL;
+intf_config_t *intf_defs = NULL;
+routing_table_line_t *routing_table = NULL;
 
 int router_thread(void* arg)
 {
@@ -147,10 +147,50 @@ static int parse_install_route(const char *route)
         return ERR_FORMAT;
     intf_id = (uint8_t)ltmp;
 
-    add_route(ip_addr, cidr, &mac_addr, intf_id);
+    install_route(ip_addr, cidr, intf_id, &mac_addr);
 
     return 0;
 }
+
+/**
+ * /brief Add a new route to the routing/forwarding table.
+ * 
+ * This methods adds a new route to the routing table. It handles the sorting
+ * to enable the LPM algorithm. We will copy the mac address to a new struct.
+ * 
+ * /param dst_net The IP address of the destination.
+ * /param prf The CIDR prefix of the destination.
+ * /param mac The MAC of the next hop.
+ * /param intf The interface where we can reach the next hop.
+ * 
+ * /return 0 on success.
+ *      Errors: ERR_MEM, ERR_GEN
+ */
+static int install_route(uint32_t dst_net, uint8_t prf,
+                            uint8_t intf, struct ether_addr* mac) {
+        routing_table_line_t **iterator = &routing_table;
+        routing_table_line_t *new_line = NULL;
+
+        // Store the strip away a possible host part from the dst network.
+        uint32_t netmask = (1 << (32 - prf)) - 1;
+        dst_net &= netmask;
+
+        while(*iterator != NULL && (*iterator)->netmask > netmask)
+            *iterator = (*iterator)->nxt;
+
+        if((new_line = malloc(sizeof(routing_table_line_t))) == NULL)
+            return ERR_MEM;
+
+        new_line->nxt = *iterator;
+        new_line->dst_net = dst_net;
+        new_line->netmask = netmask;
+        new_line->rte.dst_port = intf;
+        memcpy(&new_line->rte.dst_mac, mac, sizeof(struct ether_addr));
+
+        *iterator = new_line;
+
+        return 0;
+    }
 
 
 /**
@@ -178,8 +218,6 @@ static int parse_intf_dev(const char *def)
     uint32_t ip_addr = 0;
     char *ip_start = NULL, *tmp = NULL;
 
-    intf_config *new_config;
-
     // Get the seperating ,
     if((ip_start = strstr(def, ",")) == NULL)
         return ERR_FORMAT;
@@ -197,41 +235,32 @@ static int parse_intf_dev(const char *def)
     if(inet_pton(AF_INET, ip_start, &ip_addr) != 1)
         return ERR_FORMAT;
 
-    if((new_config = malloc(sizeof(intf_config))) == NULL)
-        return ERR_MEM;
-
-    if(add_intf_config(new_config) < 0) {
-        free(new_config);
-        return ERR_GEN;
-    }
-
-    return 0;
+    return add_intf_config(intf, ip_addr);
 }
 
 /**
  * /brief Add a new interface configuration to the list of
  *      interface configurations.
  * 
- * The methods adds a given interface configuration to the list of interface
- * configuration objects of this router.
+ *  Adds a new interface configuration for the given interface and ip address
+ * to the list of interface configurations.
  * 
- * /param new_config The configuration we should add.
+ * /param intf ID of the interface this config belongs to.
+ * /param ip_addr IPv4 address of the interface.
  * /return 0 on success.
- *      Errors: ERR_MEM, ERR_ARG_NULL
+ *      Errors: ERR_MEM
  */
-static int add_intf_config(intf_config *new_config) {
-    list_node **iterator = &intf_defs;
-
-    if(new_config == NULL)
-        return ERR_ARG_NULL;
+static int add_intf_config(uint8_t intf, uint32_t ip_addr) {
+    intf_config_t **iterator = &intf_defs;
 
     while(*iterator != NULL)
         iterator = &((*iterator)->nxt);
 
-    if((*iterator = malloc(sizeof(list_node))) == NULL)
+    if((*iterator = malloc(sizeof(intf_config_t))) == NULL)
         return ERR_MEM;
 
-    (*iterator)->data = new_config;
+    (*iterator)->ip_addr = ip_addr;
+    (*iterator)->intf = intf;
     (*iterator)->nxt = NULL;
     return 0;
 }
@@ -271,8 +300,7 @@ static int parse_mac(const char *s_mac, struct ether_addr *mac)
  * \param argc the argc argument the system hands over to our main method.
  * \param argv the argv argument the system hands over to our main method.
  * \return 0 if command line parsing was successful.
- *      -1 on a general error.
- *      -2 if we ran out of memory.
+ *      Errors: ERR_GEN
  */
 int parse_args(int argc, char **argv)
 {
@@ -283,7 +311,7 @@ int parse_args(int argc, char **argv)
             if(parse_install_route(argv[++ctr]) < 0) {
                 printf("Route definition has an illegal format: %s\n",
                     argv[ctr - 1]);
-                return -1;
+                return ERR_GEN;
             }
             break;
         case 'p':
@@ -297,7 +325,7 @@ int parse_args(int argc, char **argv)
                 else if (err == ERR_MEM)
                     printf("Could not add interface specification."
                         "Out of memory!\n");
-                return -1;
+                return ERR_GEN;
             }
             break;
         case 'h':
@@ -305,7 +333,7 @@ int parse_args(int argc, char **argv)
             return 0;
         default:
             print_help();
-            return -1;
+            return ERR_GEN;
         }   
     }
     return 0;
