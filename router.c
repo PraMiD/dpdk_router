@@ -104,7 +104,7 @@ static int parse_install_route(const char *route)
     // Missing CIDR
     if((cidr_start = strstr(route, "/")) == NULL)
         return ERR_FORMAT;
-    cidr_start = '\0';
+    *cidr_start = '\0';
     cidr_start++;
 
     // Missing MAC
@@ -112,7 +112,7 @@ static int parse_install_route(const char *route)
         strstr(cidr_start, ",")) == NULL) {
             return ERR_FORMAT;
         }
-    mac_start = '\0';
+    *mac_start = '\0';
     mac_start++;
 
     // Missing MAC
@@ -120,7 +120,7 @@ static int parse_install_route(const char *route)
         strstr(cidr_start, ",")) == NULL) {
             return ERR_FORMAT;
         }
-    intf_start = '\0';
+    *intf_start = '\0';
     intf_start++;
 
     // IP address cannot be converted
@@ -131,7 +131,7 @@ static int parse_install_route(const char *route)
     // Invalid CIDR
     if(tmp != mac_start - 1)
         return ERR_FORMAT;
-    if(ltmp > ~cidr)
+    if(((uint8_t)ltmp) != ltmp)
         return ERR_FORMAT;
     cidr = (uint8_t)ltmp;
 
@@ -143,7 +143,7 @@ static int parse_install_route(const char *route)
     // Invalid interface ID
     if(*tmp != '\0')
         return ERR_FORMAT;
-    if(ltmp > ~intf_id)
+    if(((uint8_t)ltmp) != ltmp)
         return ERR_FORMAT;
     intf_id = (uint8_t)ltmp;
 
@@ -218,22 +218,22 @@ static int parse_intf_dev(const char *def)
     uint32_t ip_addr = 0;
     char *ip_start = NULL, *tmp = NULL;
 
-    // Get the seperating ,
+    // Get the seperating ','
     if((ip_start = strstr(def, ",")) == NULL)
         return ERR_FORMAT;
-    ip_start = '\0';
+    *ip_start = '\0';
     ip_start++;
-
+    
     ltmp = strtol(def, &tmp, 10);
     // Invalid interface ID
     if(*tmp != '\0')
         return ERR_FORMAT;
-    if(ltmp > ~intf)
+    if(((uint8_t)ltmp) != ltmp)
         return ERR_FORMAT;
     intf = (uint8_t)ltmp;
-
     if(inet_pton(AF_INET, ip_start, &ip_addr) != 1)
         return ERR_FORMAT;
+    
 
     return add_intf_config(intf, ip_addr);
 }
@@ -262,6 +262,8 @@ static int add_intf_config(uint8_t intf, uint32_t ip_addr) {
     (*iterator)->ip_addr = ip_addr;
     (*iterator)->intf = intf;
     (*iterator)->nxt = NULL;
+
+    printf("Added interface configuration for interface %d\n", intf);
     return 0;
 }
 
@@ -309,19 +311,20 @@ int parse_args(int argc, char **argv)
         switch (argv[ctr][1]) {
         case 'r':
             if(parse_install_route(argv[++ctr]) < 0) {
-                printf("Route definition has an illegal format: %s\n",
-                    argv[ctr - 1]);
+                printf("Route definition has an illegal format: '%s'\n",
+                    argv[ctr]);
                 return ERR_GEN;
             }
             break;
         case 'p':
-            if((err= parse_intf_dev(argv[++ctr]) < 0)) {
+            if((err = parse_intf_dev(argv[++ctr])) < 0) {
+                printf("Error: %d\n", err);
                 if(err == ERR_GEN)
                     printf("Could not parse the interface configuration because"
                         "of an unknown error!\n");
                 if(err == ERR_FORMAT)
-                    printf("Interface configuration has an illegal format: %s\n",
-                        argv[ctr - 1]);
+                    printf("Interface configuration has an illegal format: '%s'\n",
+                        argv[ctr]);
                 else if (err == ERR_MEM)
                     printf("Could not add interface specification."
                         "Out of memory!\n");
