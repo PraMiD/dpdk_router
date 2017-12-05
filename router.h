@@ -5,19 +5,21 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include <rte_config.h>
-#include <rte_mbuf.h>
-#include <rte_ethdev.h>
-#include <rte_arp.h>
-#include <rte_ether.h>
-#include <rte_ip.h>
-#include <rte_byteorder.h>
-#include <rte_launch.h>
 
-#include <arpa/inet.h>
+/**********************************
+ *  Static structure definitions  *
+ **********************************/
+typedef struct intf_config {
+    uint8_t intf;
+    uint32_t ip_addr;
+    struct intf_config *nxt;
+} intf_config_t;
 
-#include "dpdk_init.h"
-#include "routing_table.h"
+
+/**********************************
+ *     Function declarations      *
+ **********************************/
+int add_intf_config(uint8_t intf, uint32_t ip_addr);
 
 int router_thread(void* arg);
 void parse_route(char *route);

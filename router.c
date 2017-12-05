@@ -14,45 +14,17 @@
 
 #include <arpa/inet.h>
 
+#include "router.h"
 #include "dpdk_init.h"
 #include "routing_table.h"
-#include "router.h"
-
-// A route in the given format <IP>/<CIDR>,<MAC>,<interface>
-// must not be longer than 36 characters at max
-#define MAC_LEN 6
-
-// Errors
-#define ERR_GEN -1
-#define ERR_FORMAT -2
-#define ERR_MEM -3
-#define ERR_ARG_NULL -4
-
-/**********************************
- *  Static structure definitions  *
- **********************************/
-typedef struct routing_table_line {
-    uint32_t dst_net;
-    uint32_t netmask;
-    struct routing_table_entry rte;
-    struct routing_table_line *nxt;
-} routing_table_line_t;
-
-typedef struct intf_config {
-    uint8_t intf;
-    uint32_t ip_addr;
-    struct intf_config *nxt;
-} intf_config_t;
+#include "global.h"
 
 
 /**********************************
  *  Static function declarations  *
  **********************************/
 static int parse_install_route(const char *route);
-static int install_route(uint32_t ip_addr, uint8_t prefix,
-                     uint8_t port, struct ether_addr* mac_addr);
 static int parse_intf_dev(const char *def);
-static int add_intf_config(uint8_t intf, uint32_t ip_addr);
 static int parse_mac(const char *s_mac, struct ether_addr *mac);
 static void print_help();
 
@@ -60,7 +32,6 @@ static void print_help();
  *       Lists and Fields         *
  **********************************/
 intf_config_t *intf_defs = NULL;
-routing_table_line_t *routing_table = NULL;
 
 int router_thread(void* arg)
 {
@@ -69,6 +40,38 @@ int router_thread(void* arg)
 
 void start_thread(uint8_t port)
 {
+}
+
+/*********************************
+ *      Function definitions     *
+ *********************************/
+/**
+ * /brief Add a new interface configuration to the list of
+ *      interface configurations.
+ * 
+ *  Adds a new interface configuration for the given interface and ip address
+ * to the list of interface configurations.
+ * 
+ * /param intf ID of the interface this config belongs to.
+ * /param ip_addr IPv4 address of the interface.
+ * /return 0 on success.
+ *      Errors: ERR_MEM
+ */
+int add_intf_config(uint8_t intf, uint32_t ip_addr) {
+    intf_config_t **iterator = &intf_defs;
+
+    while(*iterator != NULL)
+        iterator = &((*iterator)->nxt);
+
+    if((*iterator = malloc(sizeof(intf_config_t))) == NULL)
+        return ERR_MEM;
+
+    (*iterator)->ip_addr = ip_addr;
+    (*iterator)->intf = intf;
+    (*iterator)->nxt = NULL;
+
+    printf("Added interface configuration for interface %d\n", intf);
+    return 0;
 }
 
 
@@ -152,46 +155,6 @@ static int parse_install_route(const char *route)
     return 0;
 }
 
-/**
- * /brief Add a new route to the routing/forwarding table.
- * 
- * This methods adds a new route to the routing table. It handles the sorting
- * to enable the LPM algorithm. We will copy the mac address to a new struct.
- * 
- * /param dst_net The IP address of the destination.
- * /param prf The CIDR prefix of the destination.
- * /param mac The MAC of the next hop.
- * /param intf The interface where we can reach the next hop.
- * 
- * /return 0 on success.
- *      Errors: ERR_MEM, ERR_GEN
- */
-static int install_route(uint32_t dst_net, uint8_t prf,
-                            uint8_t intf, struct ether_addr* mac) {
-        routing_table_line_t **iterator = &routing_table;
-        routing_table_line_t *new_line = NULL;
-
-        // Store the strip away a possible host part from the dst network.
-        uint32_t netmask = (1 << (32 - prf)) - 1;
-        dst_net &= netmask;
-
-        while(*iterator != NULL && (*iterator)->netmask > netmask)
-            *iterator = (*iterator)->nxt;
-
-        if((new_line = malloc(sizeof(routing_table_line_t))) == NULL)
-            return ERR_MEM;
-
-        new_line->nxt = *iterator;
-        new_line->dst_net = dst_net;
-        new_line->netmask = netmask;
-        new_line->rte.dst_port = intf;
-        memcpy(&new_line->rte.dst_mac, mac, sizeof(struct ether_addr));
-
-        *iterator = new_line;
-
-        return 0;
-    }
-
 
 /**
  * /brief Parse a single interface definition and add it to the interface config.
@@ -236,35 +199,6 @@ static int parse_intf_dev(const char *def)
     
 
     return add_intf_config(intf, ip_addr);
-}
-
-/**
- * /brief Add a new interface configuration to the list of
- *      interface configurations.
- * 
- *  Adds a new interface configuration for the given interface and ip address
- * to the list of interface configurations.
- * 
- * /param intf ID of the interface this config belongs to.
- * /param ip_addr IPv4 address of the interface.
- * /return 0 on success.
- *      Errors: ERR_MEM
- */
-static int add_intf_config(uint8_t intf, uint32_t ip_addr) {
-    intf_config_t **iterator = &intf_defs;
-
-    while(*iterator != NULL)
-        iterator = &((*iterator)->nxt);
-
-    if((*iterator = malloc(sizeof(intf_config_t))) == NULL)
-        return ERR_MEM;
-
-    (*iterator)->ip_addr = ip_addr;
-    (*iterator)->intf = intf;
-    (*iterator)->nxt = NULL;
-
-    printf("Added interface configuration for interface %d\n", intf);
-    return 0;
 }
 
 /**
