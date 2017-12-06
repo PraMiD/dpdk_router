@@ -19,6 +19,10 @@
 #include "routing_table.h"
 #include "global.h"
 
+// A route in the given format <IP>/<CIDR>,<MAC>,<interface>
+// must not be longer than 36 characters at max
+#define MAC_LEN 6
+
 
 /**********************************
  *  Static function declarations  *
@@ -26,49 +30,113 @@
 static int parse_install_route(const char *route);
 static int parse_intf_dev(const char *def);
 static int parse_mac(const char *s_mac, struct ether_addr *mac);
+static int cfg_intfs();
+static int dpdk_init();
+static int start_threads();
+static int router_thread(void *arg);
 static void print_help();
+
 
 /**********************************
  *       Lists and Fields         *
  **********************************/
-intf_config_t *intf_defs = NULL;
+static uint no_intf = 0;
+intf_cfg_t *intf_cfgs = NULL;
 
-int router_thread(void* arg)
+int router_thread(void *arg)
 {
     return 1;
-}
-
-void start_thread(uint8_t port)
-{
 }
 
 /*********************************
  *      Function definitions     *
  *********************************/
 /**
- * /brief Add a new interface configuration to the list of
+ * \brief Start the router.
+ * 
+ * Start the router by initializing the DPDK framework, configuring all
+ * interfaces and starting the single threads that handle the packets on the
+ * configured interfaces.
+ * 
+ * \return 0 on success.
+ *          Errors: ERR_GEN
+ */
+int start_router()
+{
+    if(dpdk_init() < 0) {
+        printf("Not able to initialize the router. Aborting...\n");
+        printf("rte_erro while dpdk_init: %d\n", rte_errno);
+        return ERR_GEN;
+    }
+
+    if(cfg_intfs() < 0) {
+        printf("Could not configure the interfaces! Aborting...\n");
+        return ERR_GEN;
+    }
+
+    printf("Starting to serve on %d interfaces!\n", no_intf);
+
+    start_threads();
+
+    // Wait until all lcores have finished serving
+    rte_eal_mp_wait_lcore();
+    return 0;
+}
+
+/**
+ * \brief Start packet processing on the different interfaces.
+ * 
+ * This functions starts the packet processing on the different lcores.
+ * We pass the intf_cfg_t structure to the router_thread method responsible
+ * for this interface as arguments.
+ * 
+ * \return 0 on success.
+ *          Errors: ERR_START If we could not start the thread on one core.
+ */
+static int start_threads() {
+    // lcore 0 is reserved for the MASTER
+    int it = 1;
+    intf_cfg_t *iterator = intf_cfgs;
+
+    for(; iterator != NULL; iterator = iterator->nxt, it++) {
+        iterator->lcore = it;
+        
+        if(rte_eal_remote_launch(router_thread, iterator, it) < 0) {
+            printf("Could not launch packet processing on lcore %d\n", it);
+            return ERR_START;
+        }
+        printf("Starting to process packets of interface: %d on lcore %d\n",
+                iterator->intf, iterator->lcore);
+    }
+    return 0;
+}
+
+/**
+ * \brief Add a new interface configuration to the list of
  *      interface configurations.
  * 
  *  Adds a new interface configuration for the given interface and ip address
  * to the list of interface configurations.
  * 
- * /param intf ID of the interface this config belongs to.
- * /param ip_addr IPv4 address of the interface.
- * /return 0 on success.
+ * \param intf ID of the interface this config belongs to.
+ * \param ip_addr IPv4 address of the interface.
+ * \return 0 on success.
  *      Errors: ERR_MEM
  */
-int add_intf_config(uint8_t intf, uint32_t ip_addr) {
-    intf_config_t **iterator = &intf_defs;
+int add_intf_cfg(uint8_t intf, uint32_t ip_addr) {
+    intf_cfg_t **iterator = &intf_cfgs;
 
     while(*iterator != NULL)
         iterator = &((*iterator)->nxt);
 
-    if((*iterator = malloc(sizeof(intf_config_t))) == NULL)
+    if((*iterator = malloc(sizeof(intf_cfg_t))) == NULL)
         return ERR_MEM;
 
     (*iterator)->ip_addr = ip_addr;
     (*iterator)->intf = intf;
     (*iterator)->nxt = NULL;
+
+    no_intf++;
 
     printf("Added interface configuration for interface %d\n", intf);
     return 0;
@@ -78,9 +146,62 @@ int add_intf_config(uint8_t intf, uint32_t ip_addr) {
 /*********************************
  *  Static function definitions  *
  *********************************/
+/**
+ * \brief Initialize DPDK.
+ * 
+ * Initialize DPDK by setting the number of cores to use, the number of memory
+ * sockets and the coremask.
+ * We will reserve no_intf + 1 threads for the router as lcore 0 is for the 
+ * master -> Therefore, we can use 1..no_intf + 1 for the clients!
+ * 
+ * \return 0 if the initilaization was successful.
+ *          Errors: ERR_CFG: Some error occured while configuring DPDK.
+ */
+static int dpdk_init()
+{
+    int argc = no_intf > 0 ? 3 : 2;
+	char* argv[argc];
+    char no_cores[32];
+
+    argv[0] = "-c1";
+    argv[1] = "-n1";
+
+    if(no_intf > 0) {
+        // +1 as we need one for the master thread (ID 0)
+        sprintf(no_cores, "--lcores=(0-%1.3u)@0", no_intf+1);
+        argv[2] = no_cores;    
+    }
+
+	if(rte_eal_init(argc, argv) == -1)
+        return ERR_CFG;
+    return 0;
+}
 
 /**
- * /brief Parse a single route and add it to the routing table.
+ * \brief Setup the interfaces the user entered using the command line options.
+ * 
+ * Configure the interfaces used by this router. We will configure the
+ * interfaces according to the intf_cfgs list.
+ * 
+ * \return 0 if interface configuration was successful for all interfaces.
+ *          Errors: Currently none, but we use int as return type if we
+ *                  want to use error messages in the future.
+ *                  Therefore, the user should test if the return value
+ *                  is smaller than zero for upwards compatibility.
+ */
+static int cfg_intfs()
+{
+    intf_cfg_t *iterator = intf_cfgs;
+    
+    for(; iterator != NULL; iterator = iterator->nxt) {
+        configure_device(iterator->intf, no_intf);
+    }
+
+    return 0;
+}
+
+/**
+ * \brief Parse a single route and add it to the routing table.
  * 
  * This method will parse a route given as command line argument to the router.
  * After checking the format, we add it to the routing table.
@@ -198,7 +319,7 @@ static int parse_intf_dev(const char *def)
         return ERR_FORMAT;
     
 
-    return add_intf_config(intf, ip_addr);
+    return add_intf_cfg(intf, ip_addr);
 }
 
 /**
@@ -273,6 +394,9 @@ int parse_args(int argc, char **argv)
             return ERR_GEN;
         }   
     }
+    if(no_intf == 0)
+                printf("Warning:"
+                    "No interfaces specified the router shall handle.\n");
     return 0;
 }
 

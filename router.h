@@ -9,22 +9,25 @@
 /**********************************
  *  Static structure definitions  *
  **********************************/
-typedef struct intf_config {
+typedef struct intf_cfg {
     uint8_t intf;
     uint32_t ip_addr;
-    struct intf_config *nxt;
-} intf_config_t;
+    uint16_t lcore;
+    struct intf_cfg *nxt;
+} intf_cfg_t;
+
+/**********************************
+ *         Public fields          *
+ **********************************/
+extern intf_cfg_t *intf_cfgs;
 
 
 /**********************************
  *     Function declarations      *
  **********************************/
-int add_intf_config(uint8_t intf, uint32_t ip_addr);
-
-int router_thread(void* arg);
-void parse_route(char *route);
 int parse_args(int argc, char **argv);
-void start_thread(uint8_t port);
+int start_router();
+int add_intf_cfg(uint8_t intf, uint32_t ip_addr);
 
 #endif
 
