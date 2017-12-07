@@ -11,5 +11,9 @@
 #define ERR_ARG_NULL -4
 #define ERR_CFG -5
 #define ERR_START -6
+#define ERR_NOT_IMPL -7
+#define ERR_INV_PKT -8
+#define ERR_NOTFORME -9
 
+#define VERBOSE
 #endif

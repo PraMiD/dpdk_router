@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <stdint.h>
 #include <unistd.h>
 #include <inttypes.h>
@@ -17,11 +18,12 @@
 #include "router.h"
 #include "dpdk_init.h"
 #include "routing_table.h"
+#include "ethernet_stack.h"
 #include "global.h"
 
 // A route in the given format <IP>/<CIDR>,<MAC>,<interface>
 // must not be longer than 36 characters at max
-#define MAC_LEN 6
+#define MAC_LEN ETHER_ADDR_LEN
 
 
 /**********************************
@@ -45,7 +47,16 @@ intf_cfg_t *intf_cfgs = NULL;
 
 int router_thread(void *arg)
 {
-    return 1;
+    intf_cfg_t* cfg = (intf_cfg_t *)arg;
+	struct rte_mbuf* buf[THREAD_BUFSIZE];
+
+	while (1) {
+		uint16_t rx = rte_eth_rx_burst(cfg->intf, cfg->rx_queue_num, buf, THREAD_BUFSIZE);
+		for (uint16_t i = 0; i < rx; ++i) {
+            handle_frame(cfg, buf[i]);
+        }
+	}
+	return 0;
 }
 
 /*********************************
@@ -99,7 +110,13 @@ static int start_threads() {
     intf_cfg_t *iterator = intf_cfgs;
 
     for(; iterator != NULL; iterator = iterator->nxt, it++) {
+        // In our setting each core is responsible for another interface.
+        // As we only have one core that receives packets on a port we always
+        // use the rx_queue 0
+        iterator->rx_queue_num = 0;
         iterator->lcore = it;
+        rte_eth_macaddr_get(iterator->intf, &iterator->ether_addr);
+
         
         if(rte_eal_remote_launch(router_thread, iterator, it) < 0) {
             printf("Could not launch packet processing on lcore %d\n", it);
@@ -132,7 +149,7 @@ int add_intf_cfg(uint8_t intf, uint32_t ip_addr) {
     if((*iterator = malloc(sizeof(intf_cfg_t))) == NULL)
         return ERR_MEM;
 
-    (*iterator)->ip_addr = ip_addr;
+    (*iterator)->ip_addr_be = ip_addr;
     (*iterator)->intf = intf;
     (*iterator)->nxt = NULL;
 

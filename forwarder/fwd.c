@@ -8,6 +8,7 @@
 #include <rte_mbuf.h>
 #include <rte_ethdev.h>
 #include <rte_ether.h>
+#include <rte_ethdev.h>
 #include <rte_launch.h>
 
 #include "../dpdk_init.h"
