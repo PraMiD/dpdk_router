@@ -51,8 +51,10 @@ int router_thread(void *arg)
 	struct rte_mbuf* buf[THREAD_BUFSIZE];
 
 	while (1) {
-		uint16_t rx = rte_eth_rx_burst(cfg->intf, cfg->rx_queue_num, buf, THREAD_BUFSIZE);
-		for (uint16_t i = 0; i < rx; ++i) {
+		uint32_t rx = recv_from_device(cfg->intf, cfg->num_rx_queues, buf, THREAD_BUFSIZE);
+        if (rx == 0)
+            usleep(100);
+		for (uint32_t i = 0; i < rx; ++i) {
             handle_frame(cfg, buf[i]);
         }
 	}
@@ -110,10 +112,7 @@ static int start_threads() {
     intf_cfg_t *iterator = intf_cfgs;
 
     for(; iterator != NULL; iterator = iterator->nxt, it++) {
-        // In our setting each core is responsible for another interface.
-        // As we only have one core that receives packets on a port we always
-        // use the rx_queue 0
-        iterator->rx_queue_num = 0;
+        iterator->num_rx_queues = no_intf;
         iterator->lcore = it;
         rte_eth_macaddr_get(iterator->intf, &iterator->ether_addr);
 

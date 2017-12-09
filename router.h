@@ -21,7 +21,7 @@ typedef struct intf_cfg {
     // In addition, this number-1 gives us the transeive queue number we have
     // to use for ever interface
     uint16_t lcore;
-    uint16_t rx_queue_num;
+    uint16_t num_rx_queues;
     struct intf_cfg *nxt;
 } intf_cfg_t;
 
