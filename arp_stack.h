@@ -8,6 +8,7 @@
 
 #define ARP_PKT_LEN 28
 
-int handle_arp(intf_cfg_t *cfg, struct rte_mbuf *mbuf, char *pkt, int len);
+extern int handle_arp(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
+                         char *pkt, uint16_t len);
 
 #endif

@@ -14,6 +14,7 @@
 #define ERR_NOT_IMPL -7
 #define ERR_INV_PKT -8
 #define ERR_NOTFORME -9
+#define ERR_TTL_EXP -10
 
 #define VERBOSE
 #endif

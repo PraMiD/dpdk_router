@@ -131,11 +131,11 @@ static int start_threads() {
  * \brief Add a new interface configuration to the list of
  *      interface configurations.
  * 
- *  Adds a new interface configuration for the given interface and ip address
+ * Adds a new interface configuration for the given interface and ip address
  * to the list of interface configurations.
  * 
  * \param intf ID of the interface this config belongs to.
- * \param ip_addr IPv4 address of the interface.
+ * \param ip_addr IPv4 address of the interface in big endian format.
  * \return 0 on success.
  *      Errors: ERR_MEM
  */

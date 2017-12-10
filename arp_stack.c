@@ -12,7 +12,7 @@
 /**********************************
  *  Static function declarations  *
  **********************************/
-static int chk_valid_handle(char *hdr, int len, intf_cfg_t *cfg);
+static int chk_valid_handle(char *hdr, uint16_t len, intf_cfg_t *cfg);
 
 /**********************************
  *      Function definitions      *
@@ -35,7 +35,7 @@ static int chk_valid_handle(char *hdr, int len, intf_cfg_t *cfg);
  *                  ERR_NOT_IMPL: We do not support this type of requests.
  *                  ERR_NOTFORME: Wrong destination IP address.
  */
-int handle_arp(intf_cfg_t *cfg, struct rte_mbuf *mbuf, char *pkt, int len)
+int handle_arp(intf_cfg_t *cfg, struct rte_mbuf *mbuf, char *pkt, uint16_t len)
 {
     struct arp_hdr *hdr = (struct arp_hdr *)pkt;
     int err = 0;
@@ -87,7 +87,7 @@ int handle_arp(intf_cfg_t *cfg, struct rte_mbuf *mbuf, char *pkt, int len)
  *                  ERR_NOTFORME: IP address does not match the one on
  *                                  this interface.
  */
-static int chk_valid_handle(char *pkt, int len, intf_cfg_t *cfg) {
+static int chk_valid_handle(char *pkt, uint16_t len, intf_cfg_t *cfg) {
     struct arp_hdr *hdr = (struct arp_hdr *)pkt;
 
     if(len != ARP_PKT_LEN) {

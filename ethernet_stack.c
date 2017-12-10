@@ -5,6 +5,7 @@
 #include "ethernet_stack.h"
 #include "router.h"
 #include "arp_stack.h"
+#include "ipv4_stack.h"
 #include "global.h"
 
 /**
@@ -43,18 +44,31 @@ int handle_frame(intf_cfg_t *cfg, struct rte_mbuf *mbuf)
 
     switch(rte_be_to_cpu_16(hdr->ether_type)) {
         case ETHER_TYPE_IPv4:
-            return 0;
+            if(handle_ipv4(
+                            cfg,
+                            mbuf,
+                            ((char *)hdr) + ETHER_HDR_LEN,
+                            rte_pktmbuf_data_len(mbuf) - ETHER_HDR_LEN
+            ) == ERR_INV_PKT) { // Do not care about the other errors
+                                // as the callee cannot handle them
+                                // anyway
+                return ERR_INV_PKT;
+            }
+            break;
         case ETHER_TYPE_ARP:
-            // We do not check if an ARP packet is addressed to MAC_BROADCASE
+            // We do not check if an ARP packet is addressed to MAC_BROADCAST
             // This is an efficiency problem of the sender not our router!
-            handle_arp(cfg,
+            handle_arp(
+                        cfg,
                         mbuf,
                         ((char *)hdr) + ETHER_HDR_LEN,
                         rte_pktmbuf_data_len(mbuf) - ETHER_HDR_LEN
-                    ); // Not aware of VLANs!
+            ); // Not aware of VLANs!
+            break;
         default:
             return ERR_NOT_IMPL; 
     }
+    return 0;
 }
 
 /**
