@@ -13,7 +13,7 @@
  *  Static function declarations *
  *********************************/
 static int basic_chks(const void *pkt, uint16_t len);
-static int lookup_and_send(intf_cfg_t *cfg, struct rte_mbuf *mbuf, 
+static int lookup_and_fwd(intf_cfg_t *cfg, struct rte_mbuf *mbuf, 
                                 const void *pkt);
 
 
@@ -86,7 +86,7 @@ int handle_ipv4(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
     // has little endian format. However, this approach is more portable!
     hdr->hdr_checksum = htonl(ntohl(hdr->hdr_checksum) - 1);
 
-    return lookup_and_send(cfg, mbuf, pkt, len);
+    return lookup_and_fwd(cfg, mbuf, pkt);
 }
 
 /*********************************
@@ -166,5 +166,5 @@ static int basic_chks(const void *pkt, uint16_t len)
 static int lookup_and_fwd(intf_cfg_t *cfg, struct rte_mbuf *buf, 
                             const void *pkt)
 {
-
+    return 0;
 }
