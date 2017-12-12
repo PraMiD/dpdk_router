@@ -222,6 +222,7 @@ static int cfg_intfs()
  * This method will parse a route given as command line argument to the router.
  * After checking the format, we add it to the routing table.
  * Routing definition example: 10.0.10.2/32,52:54:00:cb:ee:f4,0
+ * Format: <net_address>/prefix,<nxt_hop_max>,<egress_iface>
  * 
  * This function is designed to work on command line arguments.
  * In addition, we do not copy the input string to some local buffer.
@@ -236,7 +237,7 @@ static int cfg_intfs()
 static int parse_install_route(const char *route)
 {
     char *cidr_start = NULL, *mac_start = NULL, *intf_start = NULL, *tmp = NULL;
-    uint32_t ip_addr = 0;
+    uint32_t net_addr = 0;
     uint8_t cidr = 0, intf_id = 0;
     long ltmp = 0;
     struct ether_addr mac_addr;
@@ -257,14 +258,14 @@ static int parse_install_route(const char *route)
 
     // Missing MAC
     if((intf_start = 
-        strstr(cidr_start, ",")) == NULL) {
+        strstr(mac_start, ",")) == NULL) {
             return ERR_FORMAT;
         }
     *intf_start = '\0';
     intf_start++;
 
     // IP address cannot be converted
-    if(inet_pton(AF_INET, route, &ip_addr) != 1)
+    if(inet_pton(AF_INET, route, &net_addr) != 1)
         return ERR_FORMAT;
 
     ltmp = strtol(cidr_start, &tmp, 10);
@@ -287,7 +288,7 @@ static int parse_install_route(const char *route)
         return ERR_FORMAT;
     intf_id = (uint8_t)ltmp;
 
-    install_route(ip_addr, cidr, intf_id, &mac_addr);
+    install_route(net_addr, cidr, intf_id, &mac_addr);
 
     return 0;
 }
@@ -382,8 +383,7 @@ int parse_args(int argc, char **argv)
         switch (argv[ctr][1]) {
         case 'r':
             if(parse_install_route(argv[++ctr]) < 0) {
-                printf("Route definition has an illegal format: '%s'\n",
-                    argv[ctr]);
+                printf("Route definition has an illegal format!\n");
                 return ERR_GEN;
             }
             break;
@@ -394,8 +394,8 @@ int parse_args(int argc, char **argv)
                     printf("Could not parse the interface configuration because"
                         "of an unknown error!\n");
                 if(err == ERR_FORMAT)
-                    printf("Interface configuration has an illegal format: '%s'\n",
-                        argv[ctr]);
+                    printf("Interface configuration has an illegal format:"
+                        "'%s'\n", argv[ctr]);
                 else if (err == ERR_MEM)
                     printf("Could not add interface specification."
                         "Out of memory!\n");

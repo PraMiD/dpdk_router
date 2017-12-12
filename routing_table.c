@@ -29,8 +29,13 @@ int install_route(uint32_t dst_net, uint8_t prf,
         routing_table_entry_t **iterator = &routing_table;
         routing_table_entry_t *new_line = NULL;
 
-        // Store the strip away a possible host part from the dst network.
-        uint32_t netmask = (1 << (32 - prf)) - 1;
+        // Strip away a possible host part from the dst network.
+        uint32_t netmask = ~0;
+        // The expression below cannot handle prefixes of 32 nicely
+        // (without casting to 64 bits and then back to 32)
+        if(prf != 32) {
+            netmask = ((1 << prf) - 1);
+        }
         dst_net &= netmask;
 
         while(*iterator != NULL && (*iterator)->netmask > netmask)

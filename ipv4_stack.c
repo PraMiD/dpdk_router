@@ -58,7 +58,7 @@ int handle_ipv4(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
     if(basic_chks(pkt, len) < 0) { // Drop the packet
         // If the check method does not provide an error message. Do it here
         #ifndef VERBOSE
-        printf("Received invalid IPv4 packet. Dropping it!");
+        printf("Received invalid IPv4 packet. Dropping it!\n");
         #endif
         drop_pkt(mbuf);
         return ERR_INV_PKT;
@@ -67,7 +67,7 @@ int handle_ipv4(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
     // Check if we have to forward the packet or if it is addressed to this host
     if(hdr->dst_addr == cfg->ip_addr_be) { // Thanks, but i can not use it..
         #ifdef VERBOSE
-        printf("Thanks for this nice IP packet, but i have to drop it!");
+        printf("Thanks for this nice IP packet, but i have to drop it!\n");
         #endif
         drop_pkt(mbuf);
         return 0;
@@ -76,7 +76,7 @@ int handle_ipv4(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
     // Is the TTL large enough to forward the packet?
     if(--hdr->time_to_live < 1) {
         #ifdef VERBOSE
-        printf("Cannot forward the packet. TTL expired in transit.");
+        printf("Cannot forward the packet. TTL expired in transit.\n");
         #endif
         drop_pkt(mbuf);
         return ERR_TTL_EXP;
@@ -85,7 +85,7 @@ int handle_ipv4(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
     // Update the checksum
     // We could have a faster implementation if we assume that the machine
     // has little endian format. However, this approach is more portable!
-    hdr->hdr_checksum = htonl(ntohl(hdr->hdr_checksum) - 1);
+    hdr->hdr_checksum += rte_cpu_to_be_16(0x0100);
 
     return lookup_and_fwd(cfg, mbuf, pkt);
 }
@@ -110,7 +110,7 @@ static int basic_chks(const void *pkt, uint16_t len)
 
     if(len < 20) { // IP packet is smaller than 20 bytes?
         #ifdef VERBOSE
-        printf("IPv4 packet is smaller than 20 bytes. Dropping it!");
+        printf("IPv4 packet is smaller than 20 bytes. Dropping it!\n");
         #endif
         return -1;
     }
@@ -119,44 +119,45 @@ static int basic_chks(const void *pkt, uint16_t len)
     hdr->hdr_checksum = 0;
     if(rte_ipv4_cksum(hdr) != chksum) { // Invalid checksum
         #ifdef VERBOSE
-        printf("IPv4 packet has an invalid checksum. Dropping it!");
+        printf("IPv4 packet has an invalid checksum. Dropping it!\n");
         #endif
         return -1;
     }
-    // Paste the original checksum back to the packet.
-    //Calculating the new one is handled by the caller!
-    hdr->hdr_checksum = chksum;
 
-    if((hdr->version_ihl & 0xF0) != 0x4) { // Check if the version is 4
+    // Paste the original checksum back to the packet.
+    // Calculating the new one is handled by the caller!
+    hdr->hdr_checksum = chksum;
+    if((hdr->version_ihl & 0xF0) != 0x40) { // Check if the version is 4
         #ifdef VERBOSE
         printf("IP stack cannot handle other IP versions than 4."
-                    "Dropping the packet!");
+                    "Dropping the packet!\n");
         #endif
         return -1;
     }
 
-    if((hdr->version_ihl & 0x0F) < 20) { // IHL must be at least 20
+    // IHL must be at least 20 byte -> 5 * 32 bit (4 byte)
+    if((hdr->version_ihl & 0x0F) < 5) {
         #ifdef VERBOSE
-        printf("IHL is less than 20. Dropping the packet!");
+        printf("IHL is less than 20. Dropping the packet!\n");
         #endif
         return -1;
     }
 
     // IHL increased to a 16 bit value
-    uint16_t ihl_16 = (uint16_t)((hdr->version_ihl & 0x000F));
-    if(hdr->total_length < ihl_16) {
+    uint16_t ihl_16 = ((uint16_t)((hdr->version_ihl & 0x000F))) << 2;
+    if(rte_be_to_cpu_16(hdr->total_length) < ihl_16) {
         #ifdef VERBOSE
-        printf("Total length is smaller than IHL. Dropping the packet!");
+        printf("Total length is smaller than IHL. Dropping the packet!\n");
         #endif
         return -1;
     }
 
     // Additional test that is not conform to RFC 1812 but such a packet is
     // invalid!
-    if(hdr->total_length != len) {
+    if(rte_be_to_cpu_16(hdr->total_length) != len) {
         #ifdef VERBOSE
         printf("Total length of IPv4 packet does not equal the packet length"
-                    " reported by the link layer. Dropping it!");
+                    " reported by the link layer. Dropping it!\n");
         #endif
         return -1;
     }
@@ -189,7 +190,7 @@ static int lookup_and_fwd(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
     // and next hop
 
     for(; iterator != NULL; iterator=iterator->nxt) {
-        if((dst_addr & iterator->netmask) ^ iterator->dst_net) { // Match?
+        if((dst_addr & iterator->netmask) == iterator->dst_net) { // Match?
             // Forward to this interface
             return send_frame(cfg, mbuf, iterator->intf, &iterator->dst_mac);
         }
@@ -197,9 +198,9 @@ static int lookup_and_fwd(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
 
     // No entry found..
     #ifdef VERBOSE
-    printf("Cannot get routing table entry for ip address: %d.%d.%d.%d",
-                (uint8_t)dst_addr, (uint8_t)dst_addr >> 8,
-                (uint8_t)dst_addr >> 16, (uint8_t)dst_addr >> 24);
+    printf("Cannot get routing table entry for ip address: %d.%d.%d.%d\n",
+                (uint8_t)dst_addr, (uint8_t)(dst_addr >> 8),
+                (uint8_t)(dst_addr >> 16), (uint8_t)(dst_addr >> 24));
     #endif
     drop_pkt(mbuf);
     return ERR_NO_ROUTE;
