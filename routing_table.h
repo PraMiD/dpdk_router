@@ -13,7 +13,7 @@ typedef struct routing_table_entry {
     uint32_t dst_net;
     uint32_t netmask;
 	uint8_t intf;
-	struct ether_addr dst_mac;
+	struct ether_addr dst_mac; // next hop MAC
     struct routing_table_entry *nxt;
 } routing_table_entry_t;
 

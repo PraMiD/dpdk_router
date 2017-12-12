@@ -7,6 +7,7 @@
 #include "ipv4_stack.h"
 #include "router.h"
 #include "ethernet_stack.h"
+#include "routing_table.h"
 #include "global.h"
 
 /*********************************
@@ -163,8 +164,43 @@ static int basic_chks(const void *pkt, uint16_t len)
     return 0;
 }
 
-static int lookup_and_fwd(intf_cfg_t *cfg, struct rte_mbuf *buf, 
+/**
+ * /brief Forward the packet to the right next hop.
+ * 
+ * This function traverses the routing table using the Longest-Prefix-Matching
+ * (LPM) algorithm. If a suitable prefix is found, we send out the packet
+ * to the specified egress interface to the next hop stored in the routing
+ * table entry.
+ * 
+ * \param cfg Configuration of the ingress interface of the packet.
+ * \param mbuf The rte_mbuf containing the packet. This is reused for sending.
+ * \param pkt Pointer to the actual IPv4 payload. In the packet, the ttl must
+ *              already be decreased!
+ * 
+ * \returns 0 on success.
+ *          Errors: ERR_NO_ROUTE if we did not find a suitable route
+ */
+static int lookup_and_fwd(intf_cfg_t *cfg, struct rte_mbuf *mbuf, 
                             const void *pkt)
 {
-    return 0;
+    routing_table_entry_t *iterator = routing_table;
+    uint32_t dst_addr = ((struct ipv4_hdr *)pkt)->dst_addr;
+    // Iterate through the sorted routing table to get the right interface
+    // and next hop
+
+    for(; iterator != NULL; iterator=iterator->nxt) {
+        if((dst_addr & iterator->netmask) ^ iterator->dst_net) { // Match?
+            // Forward to this interface
+            return send_frame(cfg, mbuf, iterator->intf, &iterator->dst_mac);
+        }
+    }
+
+    // No entry found..
+    #ifdef VERBOSE
+    printf("Cannot get routing table entry for ip address: %d.%d.%d.%d",
+                (uint8_t)dst_addr, (uint8_t)dst_addr >> 8,
+                (uint8_t)dst_addr >> 16, (uint8_t)dst_addr >> 24);
+    #endif
+    drop_pkt(mbuf);
+    return ERR_NO_ROUTE;
 }
