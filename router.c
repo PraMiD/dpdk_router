@@ -38,6 +38,12 @@ static int start_threads();
 static int router_thread(void *arg);
 static void print_help();
 
+static char *help_msg = "DPDK-based software router\n"
+                        "Usage: router [-r <route_def>]* [-p <interface_def>]* [-h]\n"
+                        "\t-r: Add a route to the routing table <route_def> = <net_address>/prefix,<nxt_hop_mac>,<egress_iface>\n"
+                        "\t-p: Specify a interface the router shall handle <interface_dev> = <interface_id>,<ip_address>\n"
+                        "\t-h: Print this help message";
+
 
 /**********************************
  *       Lists and Fields         *
@@ -228,7 +234,7 @@ static int cfg_intfs()
  * This method will parse a route given as command line argument to the router.
  * After checking the format, we add it to the routing table.
  * Routing definition example: 10.0.10.2/32,52:54:00:cb:ee:f4,0
- * Format: <net_address>/prefix,<nxt_hop_max>,<egress_iface>
+ * Format: <net_address>/prefix,<nxt_hop_mac>,<egress_iface>
  * 
  * This function is designed to work on command line arguments.
  * In addition, we do not copy the input string to some local buffer.
@@ -379,7 +385,7 @@ static int parse_mac(const char *s_mac, struct ether_addr *mac)
  * 
  * \param argc the argc argument the system hands over to our main method.
  * \param argv the argv argument the system hands over to our main method.
- * \return 0 if command line parsing was successful.
+ * \return 0 if command line parsing was successful. 1 if we just printed 'help'
  *      Errors: ERR_GEN
  */
 int parse_args(int argc, char **argv)
@@ -410,7 +416,7 @@ int parse_args(int argc, char **argv)
             break;
         case 'h':
             print_help();
-            return 0;
+            return 1;
         default:
             print_help();
             return ERR_GEN;
@@ -427,5 +433,5 @@ int parse_args(int argc, char **argv)
  */
 static void print_help()
 {
-
+    printf(help_msg);
 }
