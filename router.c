@@ -137,13 +137,19 @@ static int start_threads() {
  * \param intf ID of the interface this config belongs to.
  * \param ip_addr IPv4 address of the interface in big endian format.
  * \return 0 on success.
- *      Errors: ERR_MEM
+ *      Errors: ERR_MEM: Cannot allocate memory for this configuration
+ *              ERR_CFG: Double interface configuration
  */
 int add_intf_cfg(uint8_t intf, uint32_t ip_addr) {
     intf_cfg_t **iterator = &intf_cfgs;
 
-    while(*iterator != NULL)
+    while(*iterator != NULL) {
+        if((*iterator)->intf == intf) {
+            printf("Interface %d was configured twice!", intf);
+            return ERR_CFG;
+        }
         iterator = &((*iterator)->nxt);
+    }
 
     if((*iterator = malloc(sizeof(intf_cfg_t))) == NULL)
         return ERR_MEM;
@@ -310,7 +316,7 @@ static int parse_install_route(const char *route)
  * 
  * \param def a string containing a single interface definition.
  * \return 0 if we could parse the interface definition.
- *          Errors: ERR_FORMAT, ERR_MEM, ERR_GEN
+ *          Errors: ERR_FORMAT, ERR_MEM, ERR_GEN, ERR_CFG
  */
 static int parse_intf_dev(const char *def)
 {
