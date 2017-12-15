@@ -18,7 +18,7 @@ LINK_DIRECTORIES(
 
 # router
 SET(PRJ router)
-SET(SOURCES dpdk_init.c router.c routing_table.c ethernet_stack.c arp_stack.c ipv4_stack.c)
+SET(SOURCES dpdk_init.c router.c routing_table.c ethernet_stack.c arp_stack.c ipv4_stack.c dummy_routing_table.c)
 ADD_EXECUTABLE(${PRJ} ${SOURCES} main.c)
 TARGET_LINK_LIBRARIES(${PRJ} ${LINKER_OPTS})
 

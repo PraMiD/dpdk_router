@@ -1,4 +1,4 @@
-/*#include "routing_table.h"
+#include "routing_table.h"
 
 #include <rte_config.h>
 #include <rte_ip.h>
@@ -25,4 +25,3 @@ struct routing_table_entry* get_next_hop(uint32_t ip) {
 		return NULL;
 	}
 }
-*/

@@ -9,13 +9,20 @@
 /**********************************
  *     Structure definitions      *
  **********************************/
-typedef struct routing_table_entry {
+
+// This is the routing table entry I used in my implementation
+typedef struct rt_entry {
     uint32_t dst_net;
     uint32_t netmask;
 	uint8_t intf;
 	struct ether_addr dst_mac; // next hop MAC
-    struct routing_table_entry *nxt;
+    struct rt_entry *nxt;
 } routing_table_entry_t;
+
+struct routing_table_entry {
+    uint8_t dst_port;
+    struct ether_addr dst_mac;
+};
 
 
 /**********************************
