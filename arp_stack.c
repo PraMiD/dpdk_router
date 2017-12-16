@@ -54,8 +54,6 @@ int handle_arp(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
     hdr->arp_data.arp_sip = cfg->ip_addr_be;
     hdr->arp_op = rte_cpu_to_be_16(ARP_OP_REPLY);
 
-    printf("TIP: 0x%x\n", hdr->arp_data.arp_tip);
-
     #ifdef VERBOSE
     printf("Sent ARP reply on interface: %d to target with IP: %x\n", 
             cfg->intf, hdr->arp_data.arp_tip
