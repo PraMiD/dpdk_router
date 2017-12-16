@@ -42,7 +42,7 @@ static char *help_msg = "DPDK-based software router\n"
                         "Usage: router [-r <route_def>]* [-p <interface_def>]* [-h]\n"
                         "\t-r: Add a route to the routing table <route_def> = <net_address>/prefix,<nxt_hop_mac>,<egress_iface>\n"
                         "\t-p: Specify a interface the router shall handle <interface_dev> = <interface_id>,<ip_address>\n"
-                        "\t-h: Print this help message";
+                        "\t-h: Print this help message\n";
 
 
 /**********************************
@@ -406,8 +406,7 @@ int parse_args(int argc, char **argv)
                     printf("Could not parse the interface configuration because"
                         "of an unknown error!\n");
                 if(err == ERR_FORMAT)
-                    printf("Interface configuration has an illegal format:"
-                        "'%s'\n", argv[ctr]);
+                    printf("Interface configuration has an illegal format!\n");
                 else if (err == ERR_MEM)
                     printf("Could not add interface specification."
                         "Out of memory!\n");
@@ -434,4 +433,25 @@ int parse_args(int argc, char **argv)
 static void print_help()
 {
     printf(help_msg);
+}
+
+/**
+ * Cleanup memory.
+ */
+void clean_shutdown(void)
+{
+    routing_table_entry_t *route_nxt = NULL, *route_it = routing_table;
+    intf_cfg_t *intf_nxt = NULL, *intf_it = intf_cfgs;
+
+    while(route_it != NULL) {
+        route_nxt = route_it->nxt;
+        free(route_it);
+        route_it = route_nxt;
+    }
+
+    while(intf_it != NULL) {
+        intf_nxt = intf_it->nxt;
+        free(intf_it);
+        intf_it = intf_nxt;
+    }
 }

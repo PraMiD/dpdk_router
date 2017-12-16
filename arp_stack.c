@@ -57,7 +57,9 @@ int handle_arp(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
     printf("TIP: 0x%x\n", hdr->arp_data.arp_tip);
 
     #ifdef VERBOSE
-    printf("Sent ARP reply on interface: %d\n", cfg->intf);
+    printf("Sent ARP reply on interface: %d to target with IP: %x\n", 
+            cfg->intf, hdr->arp_data.arp_tip
+    );
     #endif
 
     // We handled our part -> Ethernet stack has to handle the source and
