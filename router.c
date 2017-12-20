@@ -242,6 +242,9 @@ static int cfg_intfs()
  * compiliation is done using the C99 standard) we do not check the length of
  * the command line arguments.
  * 
+ * We install the routes in our custom routing table.
+ * However, these entries are currently not used!
+ * 
  * \param route a string containing a single route as command line argument.
  * \return 0 if we could parse the route.
  *          Errors: ERR_FORMAT
@@ -300,6 +303,9 @@ static int parse_install_route(const char *route)
         return ERR_FORMAT;
     intf_id = (uint8_t)ltmp;
 
+
+    // Currently we do not use our routing table.
+    // However, we already install them in there
     install_route(net_addr, cidr, intf_id, &mac_addr);
 
     return 0;

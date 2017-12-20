@@ -11,6 +11,10 @@
  **********************************/
 
 // This is the routing table entry I used in my implementation
+// This structure is currently not used, but I missed in the beginning
+// of the exercise that we shall use the dummy routing table.
+// In addition, I will reuse this structure while building the DIR24-8
+// routing table. Therefore, I leave it here.
 typedef struct rt_entry {
     uint32_t dst_net;
     uint32_t netmask;
