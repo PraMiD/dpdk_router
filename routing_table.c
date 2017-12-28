@@ -6,17 +6,20 @@
 /**********************************
  *    Global field definitions    *
  **********************************/
-routing_table_entry_t *routing_table = NULL;
+tmp_route_t *tmp_route_list = NULL;
 
 
 /**********************************
  *      Function definitions      *
  **********************************/
 /**
- * /brief Add a new route to the routing/forwarding table.
+ * /brief Add a new route to the temporary list of routes.
  * 
- * This methods adds a new route to the routing table. It handles the sorting
- * to enable the LPM algorithm. We will copy the mac address to a new struct.
+ * This method adds a new route to the temporary list of routes.
+ * Sorting is handled by this method to simplify the construction of the
+ * Dir-24-8 routing tables.
+ * 
+ * The entries are sorted from shortest to longest prefixes.
  * 
  * /param dst_net The IP address of the destination in big endian format.
  * /param prf The CIDR prefix of the destination.
@@ -28,8 +31,8 @@ routing_table_entry_t *routing_table = NULL;
  */
 int install_route(uint32_t dst_net, uint8_t prf,
                     uint8_t intf, struct ether_addr* mac) {
-        routing_table_entry_t **iterator = &routing_table;
-        routing_table_entry_t *new_line = NULL;
+        tmp_route_t **iterator = &tmp_route_list;
+        tmp_route_t *new_line = NULL;
 
         // Strip away a possible host part from the dst network.
         uint32_t netmask = 0;
@@ -40,10 +43,10 @@ int install_route(uint32_t dst_net, uint8_t prf,
         }
         dst_net &= netmask;
 
-        while(*iterator != NULL && (*iterator)->netmask > netmask)
+        while(*iterator != NULL && (*iterator)->netmask < netmask)
             *iterator = (*iterator)->nxt;
 
-        if((new_line = malloc(sizeof(routing_table_entry_t))) == NULL)
+        if((new_line = malloc(sizeof(tmp_route_t))) == NULL)
             return ERR_MEM;
 
         // iterator is either NULL or there is a valid next entry
@@ -54,8 +57,9 @@ int install_route(uint32_t dst_net, uint8_t prf,
         new_line->intf = intf;
         memcpy(&new_line->dst_mac, mac, sizeof(struct ether_addr));
 
-        printf("Added route to destination network: %d.%d.%d.%d"
-                    " with netmask %d.%d.%d.%d\n",
+        #ifdef VERBOSE
+        printf("Added route for destination network %d.%d.%d.%d"
+                    " with netmask %d.%d.%d.%d to temporary routing table.\n",
                     // dst_net is big endian
                     (uint8_t)dst_net, (uint8_t)(dst_net >> 8),
                     (uint8_t)(dst_net >> 16), (uint8_t)(dst_net >> 24),
@@ -64,8 +68,27 @@ int install_route(uint32_t dst_net, uint8_t prf,
                     (uint8_t)netmask, (uint8_t)(netmask >> 8),
                     (uint8_t)(netmask >> 16), (uint8_t)(netmask >> 24)
         );
+        #endif
 
         *iterator = new_line;
 
         return 0;
+}
+
+/*
+ * \brief Clear all temporary routing table entries.
+ * 
+ * The method is used to clear all temporary routing table entries.
+ */
+void clean_tmp_routing_table(void)
+{
+    tmp_route_t *it = tmp_route_list, *nxt;
+
+    while(it != NULL) {
+        nxt = it->nxt;
+        free(it);
+        it = nxt;
+    }
+
+    tmp_route_list = NULL;
 }

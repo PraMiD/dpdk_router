@@ -19,6 +19,7 @@
 #include "dpdk_init.h"
 #include "routing_table.h"
 #include "ethernet_stack.h"
+#include "routing_table.h"
 #include "global.h"
 
 // A route in the given format <IP>/<CIDR>,<MAC>,<interface>
@@ -446,18 +447,13 @@ static void print_help()
  */
 void clean_shutdown(void)
 {
-    routing_table_entry_t *route_nxt = NULL, *route_it = routing_table;
     intf_cfg_t *intf_nxt = NULL, *intf_it = intf_cfgs;
 
-    while(route_it != NULL) {
-        route_nxt = route_it->nxt;
-        free(route_it);
-        route_it = route_nxt;
-    }
-
+    clean_tmp_routing_table();
     while(intf_it != NULL) {
         intf_nxt = intf_it->nxt;
         free(intf_it);
         intf_it = intf_nxt;
     }
 }
+
