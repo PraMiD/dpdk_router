@@ -3,10 +3,6 @@
 #include <rte_config.h>
 #include <rte_ip.h>
 
-// do nothing :)
-void build_routing_table() {
-}
-
 static struct routing_table_entry hop_info1 = {
     .dst_mac = {.addr_bytes = {0x52, 0x54, 0x00, 0x61, 0x7a, 0x13}},
     .dst_port = 0

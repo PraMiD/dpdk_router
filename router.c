@@ -307,7 +307,7 @@ static int parse_install_route(const char *route)
 
     // Currently we do not use our routing table.
     // However, we already install them in there
-    install_route(net_addr, cidr, intf_id, &mac_addr);
+    add_route(net_addr, cidr, &mac_addr, intf_id);
 
     return 0;
 }
