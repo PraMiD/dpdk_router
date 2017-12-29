@@ -109,7 +109,7 @@ void clean_tmp_routing_table(void)
 
 int build_routing_table(void)
 {
-    tmp_route_t *it_24 = tmp_route_list;
+    tmp_route_t *route_it = tmp_route_list;
     uint32_t index = 0, hop_id = 0;
     uint8_t tmp = 0;
     tbl24_entry_t *tbl24_ent;
@@ -143,17 +143,18 @@ int build_routing_table(void)
 
     // Check if we have a default route -> Yes: We do not have to fill the 
     // TBL24 with zeros
-    if(it_24 != NULL && it_24->netmask != 0) { // No default route
+    if(route_it != NULL && route_it->netmask != 0) { // No default route
         // We treat the entry [0|000000000000000] (valid entry and next hop ID 0) as
         // the invalid entry -> No route to host
         memset(tbl24, 0, TBL24_SIZE);
     }
 
-    for(; it_24 != NULL; it_24 = it_24->nxt) {
-        if(it_24->prf < 25) {
+    for(; route_it != NULL; route_it = route_it->nxt) {
+        hop_id = route_it->hop_id;
+        if(route_it->prf < 25) {
             for(
-                index = it_24->dst_net >> 8;
-                index < ((0xFFFFFFFF & ~it_24->netmask) + it_24->dst_net) >> 8;
+                index = route_it->dst_net >> 8;
+                index < ((0xFFFFFFFF & ~route_it->netmask) + route_it->dst_net) >> 8;
                 ++index
             ) {
                 // We can simply override the entry here as this entry is more
@@ -169,7 +170,7 @@ int build_routing_table(void)
             }
 
             // Get the corresponding TBL24 entry
-            tbl24_ent = tbl24 + (it_24->dst_net >> 8);
+            tbl24_ent = tbl24 + (route_it->dst_net >> 8);
             tbl24_ent->indicator = 1;
 
             // Either the valid is valid -> Take this entry and override the
@@ -182,11 +183,11 @@ int build_routing_table(void)
                 256 * sizeof(tbllong_entry_t)
             );
 
-            tmp = (uint8_t) (it_24->dst_net & 0xFF);
+            tmp = (uint8_t) (route_it->dst_net & 0xFF);
             for(    
                 index = no_tbllong_entries * 256 + tmp;
                 index < no_tbllong_entries * 256
-                        + (0xFF & (~it_24->netmask >> 8))
+                        + (0xFF & (~route_it->netmask >> 8))
                         + tmp;
                 ++index
             ) {
