@@ -110,11 +110,13 @@ void clean_tmp_routing_table(void)
 int build_routing_table(void)
 {
     tmp_route_t *route_it = tmp_route_list;
-    uint32_t index = 0, dst_net_cpu_bo = 0;
+    uint32_t index = 0, dst_net_cpu_bo = 0, netmask_cpu_bo = 0;
     uint8_t tmp = 0;
     tbl24_entry_t *tbl24_ent;
 
     uint ret = 0;
+
+    uint test = 0;
 
     if(tbl24 != NULL) {
         ret = ERR_GEN;
@@ -150,15 +152,15 @@ int build_routing_table(void)
     }
 
     for(; route_it != NULL; route_it = route_it->nxt) {
-        dst_net_cpu_bo = rte_cpu_to_be_32(route_it->dst_net);
-        printf("Route\n");
+        dst_net_cpu_bo = rte_be_to_cpu_32(route_it->dst_net);
+        netmask_cpu_bo = rte_be_to_cpu_32(route_it->netmask);
         if(route_it->prf < 25) {
             for(
                 index = dst_net_cpu_bo >> 8;
-                index <= ((0xFFFFFFFF & ~route_it->netmask) + dst_net_cpu_bo) >> 8;
+                index <= 
+                    ((0xFFFFFFFF & ~netmask_cpu_bo) + dst_net_cpu_bo) >> 8;
                 ++index
             ) {
-                printf("TMP: <25%d\n", index);
                 // We can simply override the entry here as this entry is more
                 // specific than the ones before -> Sorting ;)
                 tbl24[index].indicator = 0;
@@ -186,28 +188,25 @@ int build_routing_table(void)
                 256 * sizeof(tbllong_entry_t)
             );
 
-            tmp = (uint8_t) (dst_net_cpu_bo & 0xFF);
-            printf("TMP: >24 %d\n", tbl24_ent->index + tmp);
-            printf("TMP: >24 %d\n", tbl24_ent->index
-                        + (0xFF & (~route_it->netmask >> 8))
-                        + tmp);
-            for(    
+            tmp = (uint8_t)dst_net_cpu_bo;
+            for(
                 index = tbl24_ent->index + tmp;
-                index <= tbl24_ent->index
-                        + (0xFF & (~route_it->netmask >> 8))
-                        + tmp;
+                index <= (uint8_t)(
+                        tbl24_ent->index
+                        + ((uint8_t)(0xFF & ~netmask_cpu_bo))
+                        + tmp);
                 ++index
             ) {
-                printf("%d\n", index);
                 // Override the entries we now know a more specific route
                 tbllong[index].index = route_it->hop_id;
             }
+
+            no_tbllong_entries++;
         }
     }
 
     // We do not need those entries now -> Delete them and free the used memory
     clean_tmp_routing_table();
-    printf("Dir-24-8 created successfully.\n");
 
     RET:
     return ret;
