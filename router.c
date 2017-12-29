@@ -94,6 +94,11 @@ int start_router()
         return ERR_GEN;
     }
 
+    if(build_routing_table() < 0) {
+        printf("Could not create Dir-24-8 table! Stopping...\n");
+        return ERR_GEN;
+    }
+
     printf("Starting to serve on %d interfaces!\n", no_intf);
 
     start_threads();
@@ -304,11 +309,7 @@ static int parse_install_route(const char *route)
         return ERR_FORMAT;
     intf_id = (uint8_t)ltmp;
 
-
-    // Currently we do not use our routing table.
-    // However, we already install them in there
     add_route(net_addr, cidr, &mac_addr, intf_id);
-
     return 0;
 }
 

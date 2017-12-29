@@ -83,8 +83,6 @@ int handle_ipv4(intf_cfg_t *cfg, struct rte_mbuf *mbuf,
     }
 
     // Update the checksum
-    // We could have a faster implementation if we assume that the machine
-    // has little endian format. However, this approach is more portable!
     hdr->hdr_checksum += rte_cpu_to_be_16(0x0100);
 
     return lookup_and_fwd(cfg, mbuf, pkt);

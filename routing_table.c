@@ -1,5 +1,7 @@
 #include <arpa/inet.h>
 
+#include <rte_ether.h>
+
 #include "routing_table.h"
 #include "global.h"
 
@@ -10,7 +12,14 @@ tmp_route_t *tmp_route_list = NULL;
 tbl24_entry_t *tbl24 = NULL;
 tbllong_entry_t *tbllong = NULL;
 uint no_tbllong_entries = 0;
+rt_entry_t *nxt_hops_map = NULL;
+uint no_nxt_hops_map = 0;
 
+
+/**********************************
+ *  Static funciton decalarations *
+ **********************************/
+static int alloc_hop_ids(void);
 
 /**********************************
  *      Function definitions      *
@@ -55,7 +64,7 @@ int add_route(uint32_t dst_net, uint8_t prf,
         // iterator is either NULL or there is a valid next entry
         // => The next pointer is always in a clean state
         new_line->nxt = *iterator;
-        new_line->dst_net = dst_net;
+        new_line->dst_net =  dst_net;
         new_line->netmask = netmask;
         new_line->prf = prf;
         new_line->intf = intf;
@@ -108,7 +117,7 @@ int build_routing_table(void)
     uint ret = 0;
 
     if(tbl24 != NULL) {
-        ret = ERR_MEM;
+        ret = ERR_GEN;
         goto ERR;
     }
 
@@ -123,6 +132,12 @@ int build_routing_table(void)
     if((tbllong = malloc(TBLlong_SIZE)) == NULL) {
         printf("Cannot allocate memory for TBLlong!\n");
         ret = ERR_MEM;
+        goto ERR;
+    }
+
+    // build next hops table
+    if((ret = alloc_hop_ids()) != 0) {
+        printf("Cannot build next hops table!\n");
         goto ERR;
     }
 
@@ -183,6 +198,7 @@ int build_routing_table(void)
 
     // We do not need those entries now -> Delete them and free the used memory
     clean_tmp_routing_table();
+    printf("Dir-24-8 created successfully.\n");
 
     RET:
     return ret;
@@ -199,4 +215,74 @@ int build_routing_table(void)
     }
 
     goto RET;
+}
+
+
+/*
+ * /brief Allocate the next hops specified in all routes to next hop IDs used
+ *          in the DIR-24-8 structure.
+ * 
+ * This function iterates over all route definitions and assigns every next hop
+ * specified in the route a next hop ID. The mapping from next hop ID
+ * to the outgoing interface and destination MAC (rt_entry_t) is stored in the 
+ * nxt_hops_map array.
+ * 
+ * If two routes have the same egress interface and the same destination MAC
+ * specified, we will assign them the sme next hop ID.
+ * 
+ * \return 0 on success.
+ *          Errors: ERR_MEM: Could not (re-)allocate memory for the
+ *                              nxt_hops_map.
+ */
+static int alloc_hop_ids(void)
+{
+    tmp_route_t *it = tmp_route_list, *prf_it = tmp_route_list;
+    uint nxt_hop_id = 1; // 0 is used as special 'no next hop' value
+    rt_entry_t *tmp_ptr = NULL;
+
+    // Allocate memory for the nxt_hops_map array
+    no_nxt_hops_map = INIT_NO_NXT_HOPS;
+    if((nxt_hops_map = malloc(no_nxt_hops_map * sizeof(rt_entry_t))) == NULL) {
+        printf("Not enough memory for the next hops table!\n");
+        return ERR_MEM;
+    }
+    memset(nxt_hops_map, 0, INIT_NO_NXT_HOPS * sizeof(rt_entry_t));
+
+    for(; it != NULL; it = it->nxt) {
+        for(
+            prf_it = tmp_route_list;
+            prf_it != NULL && it != prf_it;
+            prf_it = prf_it->nxt
+        ) {
+            if(
+                it->intf == prf_it->intf
+                && is_same_ether_addr(&it->dst_mac, &prf_it->dst_mac)
+            ) {
+                it->hop_id = prf_it->hop_id;
+                break;
+            }
+        }
+
+        // No next hop matched the one of the current route
+        if(it == prf_it) {
+            if(nxt_hop_id >= no_nxt_hops_map) {
+                no_nxt_hops_map += INIT_NO_NXT_HOPS;
+                if(
+                    (tmp_ptr = 
+                        realloc(nxt_hops_map, INIT_NO_NXT_HOPS * sizeof(rt_entry_t))
+                    ) == NULL
+                ) {
+                    printf("Cannot increase the size of the next hops table!\n");
+                    free(nxt_hops_map);
+                    return ERR_MEM;
+                }
+            }
+            
+            nxt_hops_map[nxt_hop_id].dst_port = it->intf;
+            ether_addr_copy(&it->dst_mac, &nxt_hops_map[nxt_hop_id].dst_mac);
+            it->hop_id = nxt_hop_id++;
+        }
+    }
+
+    return 0;
 }

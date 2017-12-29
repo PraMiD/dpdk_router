@@ -10,7 +10,7 @@
 #define TBLlong_MAX_ENTRIES 4096
 // 4096 entries are possible -> If gcc uses the 8 bit as we said -> 1MB
 #define TBLlong_SIZE (4096 * sizeof(tbllong_entry_t) * 256)
-
+#define INIT_NO_NXT_HOPS 20
 
 /**********************************
  *     Structure definitions      *
@@ -26,14 +26,16 @@ typedef struct tmp_route {
     uint32_t netmask;
     uint8_t prf;
 	uint8_t intf;
+    // As we can only store 8 bits in the TBLlong anyway, we can use 8 bits here
+    uint8_t hop_id;
 	struct ether_addr dst_mac; // next hop MAC
     struct tmp_route *nxt;
 } tmp_route_t;
 
-struct routing_table_entry {
+typedef struct routing_table_entry {
     uint8_t dst_port;
     struct ether_addr dst_mac;
-};
+} rt_entry_t;
 
 typedef struct tbl24_entry {
     uint16_t indicator:1; // Valid entry or lookup in TBLlong
@@ -65,5 +67,7 @@ extern tmp_route_t *tmp_route_list;
 extern tbl24_entry_t *tbl24;
 extern tbllong_entry_t *tbllong;
 extern uint no_tbllong_entries;
+extern rt_entry_t *nxt_hops;
+extern uint no_nxt_hops;
 #endif
 
