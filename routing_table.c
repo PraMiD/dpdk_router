@@ -13,7 +13,7 @@ tbl24_entry_t *tbl24 = NULL;
 tbllong_entry_t *tbllong = NULL;
 uint no_tbllong_entries = 0;
 rt_entry_t *nxt_hops_map = NULL;
-uint no_nxt_hops_map = 0;
+uint no_nxt_hops = 0;
 
 
 /**********************************
@@ -55,8 +55,8 @@ int add_route(uint32_t dst_net, uint8_t prf,
         }
         dst_net &= netmask;
 
-        while(*iterator != NULL && (*iterator)->netmask < netmask)
-            *iterator = (*iterator)->nxt;
+        while(*iterator != NULL && (*iterator)->netmask > netmask)
+            iterator = &(*iterator)->nxt;
 
         if((new_line = malloc(sizeof(tmp_route_t))) == NULL)
             return ERR_MEM;
@@ -110,7 +110,7 @@ void clean_tmp_routing_table(void)
 int build_routing_table(void)
 {
     tmp_route_t *route_it = tmp_route_list;
-    uint32_t index = 0, hop_id = 0;
+    uint32_t index = 0, dst_net_cpu_bo = 0;
     uint8_t tmp = 0;
     tbl24_entry_t *tbl24_ent;
 
@@ -144,23 +144,25 @@ int build_routing_table(void)
     // Check if we have a default route -> Yes: We do not have to fill the 
     // TBL24 with zeros
     if(route_it != NULL && route_it->netmask != 0) { // No default route
-        // We treat the entry [0|000000000000000] (valid entry and next hop ID 0) as
-        // the invalid entry -> No route to host
+        // We treat the entry [0|000000000000000] (TBL24 valid and
+        // next hop ID 0) as the 'no route to host' entry
         memset(tbl24, 0, TBL24_SIZE);
     }
 
     for(; route_it != NULL; route_it = route_it->nxt) {
-        hop_id = route_it->hop_id;
+        dst_net_cpu_bo = rte_cpu_to_be_32(route_it->dst_net);
+        printf("Route\n");
         if(route_it->prf < 25) {
             for(
-                index = route_it->dst_net >> 8;
-                index < ((0xFFFFFFFF & ~route_it->netmask) + route_it->dst_net) >> 8;
+                index = dst_net_cpu_bo >> 8;
+                index <= ((0xFFFFFFFF & ~route_it->netmask) + dst_net_cpu_bo) >> 8;
                 ++index
             ) {
+                printf("TMP: <25%d\n", index);
                 // We can simply override the entry here as this entry is more
                 // specific than the ones before -> Sorting ;)
                 tbl24[index].indicator = 0;
-                tbl24[index].index = hop_id;
+                tbl24[index].index = route_it->hop_id;
             }
         } else { // Prefix is longer than 24
             if(no_tbllong_entries >= TBLlong_MAX_ENTRIES) { // Enough space?
@@ -170,29 +172,35 @@ int build_routing_table(void)
             }
 
             // Get the corresponding TBL24 entry
-            tbl24_ent = tbl24 + (route_it->dst_net >> 8);
+            tbl24_ent = tbl24 + (dst_net_cpu_bo >> 8);
             tbl24_ent->indicator = 1;
+            tbl24_ent->index = no_tbllong_entries * 256;
 
             // Either the valid is valid -> Take this entry and override the
             // ones this new route is a more specific one
             // If the entry is not valid, we set all new entries to invalid
             // (hop_id == 0), too
             memset(
-                tbllong + no_tbllong_entries * 256,
+                tbllong + tbl24_ent->index,
                 tbl24_ent->index,
                 256 * sizeof(tbllong_entry_t)
             );
 
-            tmp = (uint8_t) (route_it->dst_net & 0xFF);
+            tmp = (uint8_t) (dst_net_cpu_bo & 0xFF);
+            printf("TMP: >24 %d\n", tbl24_ent->index + tmp);
+            printf("TMP: >24 %d\n", tbl24_ent->index
+                        + (0xFF & (~route_it->netmask >> 8))
+                        + tmp);
             for(    
-                index = no_tbllong_entries * 256 + tmp;
-                index < no_tbllong_entries * 256
+                index = tbl24_ent->index + tmp;
+                index <= tbl24_ent->index
                         + (0xFF & (~route_it->netmask >> 8))
                         + tmp;
                 ++index
             ) {
+                printf("%d\n", index);
                 // Override the entries we now know a more specific route
-                tbllong[index].index = hop_id;
+                tbllong[index].index = route_it->hop_id;
             }
         }
     }
@@ -234,6 +242,7 @@ int build_routing_table(void)
  * \return 0 on success.
  *          Errors: ERR_MEM: Could not (re-)allocate memory for the
  *                              nxt_hops_map.
+ *                  ERR_GEN: If there are more than 255 next hops.
  */
 static int alloc_hop_ids(void)
 {
@@ -242,8 +251,8 @@ static int alloc_hop_ids(void)
     rt_entry_t *tmp_ptr = NULL;
 
     // Allocate memory for the nxt_hops_map array
-    no_nxt_hops_map = INIT_NO_NXT_HOPS;
-    if((nxt_hops_map = malloc(no_nxt_hops_map * sizeof(rt_entry_t))) == NULL) {
+    no_nxt_hops = INIT_NO_NXT_HOPS;
+    if((nxt_hops_map = malloc(no_nxt_hops * sizeof(rt_entry_t))) == NULL) {
         printf("Not enough memory for the next hops table!\n");
         return ERR_MEM;
     }
@@ -266,8 +275,13 @@ static int alloc_hop_ids(void)
 
         // No next hop matched the one of the current route
         if(it == prf_it) {
-            if(nxt_hop_id >= no_nxt_hops_map) {
-                no_nxt_hops_map += INIT_NO_NXT_HOPS;
+            if(nxt_hop_id >= no_nxt_hops) {
+                no_nxt_hops += INIT_NO_NXT_HOPS;
+                if(no_nxt_hops > 255) {
+                    printf("To many next hops (>255) cannot be handled by "
+                    "DIR-24-8-BASIC. Aborting...\n");
+                    return ERR_GEN;
+                }
                 if(
                     (tmp_ptr = 
                         realloc(nxt_hops_map, INIT_NO_NXT_HOPS * sizeof(rt_entry_t))
