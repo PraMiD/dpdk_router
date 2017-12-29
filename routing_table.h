@@ -67,7 +67,7 @@ extern tmp_route_t *tmp_route_list;
 extern tbl24_entry_t *tbl24;
 extern tbllong_entry_t *tbllong;
 extern uint no_tbllong_entries;
-extern rt_entry_t *nxt_hops;
+extern rt_entry_t *nxt_hops_map;
 extern uint no_nxt_hops;
 #endif
 

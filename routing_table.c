@@ -106,7 +106,21 @@ void clean_tmp_routing_table(void)
     tmp_route_list = NULL;
 }
 
-
+/*
+ * /brief Build the Dir-24-8 routing table structure.
+ * 
+ * This function allocates memory for the TBL24 and TBLlong.
+ * In addition, we build the hop_id->forwarding information map used by the
+ * routing structure.
+ * Afterwards, the routing structure is filled with the routing information
+ * recieved as command line arguments. Therefore, we use the list of temporary
+ * routing entries. This list is removed afterwards.
+ * 
+ * /return 0 on success.
+ *          Errors: ERR_GEN: If the table was built before.
+ *                  ERR_MEM: We require more memory but the system is out of 
+ *                              memory.
+ */
 int build_routing_table(void)
 {
     tmp_route_t *route_it = tmp_route_list;
@@ -115,8 +129,6 @@ int build_routing_table(void)
     tbl24_entry_t *tbl24_ent;
 
     uint ret = 0;
-
-    uint test = 0;
 
     if(tbl24 != NULL) {
         ret = ERR_GEN;
@@ -295,6 +307,7 @@ static int alloc_hop_ids(void)
             nxt_hops_map[nxt_hop_id].dst_port = it->intf;
             ether_addr_copy(&it->dst_mac, &nxt_hops_map[nxt_hop_id].dst_mac);
             it->hop_id = nxt_hop_id++;
+            printf("Added hop ID: %d\n", it->hop_id);
         }
     }
 
