@@ -176,7 +176,7 @@ int build_routing_table(void)
             // Get the corresponding TBL24 entry
             tbl24_ent = tbl24 + (dst_net_cpu_bo >> 8);
             tbl24_ent->indicator = 1;
-            tbl24_ent->index = no_tbllong_entries * 256;
+            tbl24_ent->index = no_tbllong_entries;
 
             // Either the valid is valid -> Take this entry and override the
             // ones this new route is a more specific one
