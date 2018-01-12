@@ -345,14 +345,22 @@ rt_entry_t *get_next_hop(uint32_t dst_ip_cpu_bo)
         index = tbl24_entry->index;
 
         #ifdef VERBOSE
-        printf("Index: %d\n", tbl24_entry->index);
+        if(index != 0)
+                    printf(
+                        "Found routing table entry in TBL24. Index: %d\n",
+                        tbl24_entry->index
+                    );
         #endif
     } else { // Lookup in TBLlong
         tbllong_entry = tbllong + (tbl24_entry->index * 256) + ((uint8_t)dst_ip_cpu_bo);
         index = tbllong_entry->index;
 
         #ifdef VERBOSE
-        printf("Index for next hops: %d\n", tbllong_entry->index);
+        if(index != 0)
+            printf(
+                        "Found routing table entry in TBLlong. Index: %d\n",
+                        tbllong_entry->index
+                    );
         #endif
     }
 
