@@ -70,6 +70,7 @@ extern tbl24_entry_t *tbl24;
 extern tbllong_entry_t *tbllong;
 extern uint no_tbllong_entries;
 extern rt_entry_t *nxt_hops_map;
+extern uint curr_size_nxt_hops_tab_tab;
 extern uint no_nxt_hops;
 #endif
 

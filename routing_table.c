@@ -14,7 +14,8 @@ tbl24_entry_t *tbl24 = NULL;
 tbllong_entry_t *tbllong = NULL;
 uint no_tbllong_entries = 0;
 rt_entry_t *nxt_hops_map = NULL;
-uint no_nxt_hops = 0;
+uint curr_size_nxt_hops_tab = 0;
+uint no_nxt_hops = 0; // Number of valid entries
 
 
 /**********************************
@@ -28,8 +29,8 @@ static int alloc_hop_ids(void);
 /**
  * /brief Add a new route to the temporary list of routes.
  * 
- * This method adds a new route to the temporary list of routes.
- * Sorting is handled by this method to simplify the construction of the
+ * This function adds a new route to the temporary list of routes.
+ * Sorting is handled by this function to simplify the construction of the
  * Dir-24-8 routing tables.
  * 
  * The entries are sorted from shortest to longest prefixes.
@@ -100,10 +101,10 @@ void add_route(uint32_t dst_net, uint8_t prf,
         *iterator = new_line;
 }
 
-/*
+/**
  * \brief Clear all temporary routing table entries.
  * 
- * The method is used to clear all temporary routing table entries.
+ * The function is used to clear all temporary routing table entries.
  */
 void clean_tmp_routing_table(void)
 {
@@ -118,11 +119,11 @@ void clean_tmp_routing_table(void)
     tmp_route_list = NULL;
 }
 
-/*
+/**
  * \brief Clear the Dir-24-8 routing structure.
  * 
- * The method is used to cleanup the Dir-24-8 routing structure and the list of
- * next hops on a shutdown.
+ * The function is used to cleanup the Dir-24-8 routing structure and the list
+ * of next hops on a shutdown.
  */
 void clean_routing_table(void)
 {
@@ -136,7 +137,7 @@ void clean_routing_table(void)
         free(nxt_hops_map);
 }
 
-/*
+/**
  * /brief Build the Dir-24-8 routing table structure.
  * 
  * This function allocates memory for the TBL24 and TBLlong.
@@ -203,6 +204,7 @@ void build_routing_table(void)
     for(; route_it != NULL; route_it = route_it->nxt) {
         dst_net_cpu_bo = route_it->dst_net_cpu_bo;
         netmask_cpu_bo = route_it->netmask_cpu_bo;
+
         if(route_it->prf < 25) {
             for(
                 index = dst_net_cpu_bo >> 8;
@@ -218,40 +220,48 @@ void build_routing_table(void)
         } else { // Prefix is longer than 24
             if(no_tbllong_entries >= TBLlong_MAX_ENTRIES) { // Enough space?
                 printf("Not enough space in TBLlong!\n");
-                // There was more sense in this type of error handle as we could return
-                // an error message.. However, we also have to clean the state
+                // There was more sense in this type of error handle as we
+                // could return an error message..
+                // However, we also have to clean the state
                 goto ERR; 
             }
 
             // Get the corresponding TBL24 entry
             tbl24_ent = tbl24 + (dst_net_cpu_bo >> 8);
-            tbl24_ent->indicator = 1;
-            tbl24_ent->index = no_tbllong_entries;
 
-            // Either the valid is valid -> Take this entry and override the
-            // ones this new route is a more specific one
-            // If the entry is not valid, we set all new entries to invalid
-            // (hop_id == 0), too
-            memset(
-                tbllong + tbl24_ent->index,
-                tbl24_ent->index,
-                256 * sizeof(tbllong_entry_t)
-            );
+            // Check if we are the first one creating a TBLlong entry for this
+            // TBL24 entry. If the indicator is already 1, there is already
+            // an entry in the TBLlong correspoinding to this TBL24 entry.
+            if(tbl24_ent->indicator == 0)
+            {
+                // Either the entries in the TBL24 are valid 
+                // -> Take this entry and override the ones this new route is a
+                // more specific one
+                // If the entry is not valid, we set all new entries to invalid
+                // (hop_id == 0), too
+                memset(
+                    tbllong + (no_tbllong_entries * 256),
+                    tbl24_ent->index,
+                    256 * sizeof(tbllong_entry_t)
+                );
+                // Update the TBL24 entry to point to tbllong
+                tbl24_ent->indicator = 1;
+                tbl24_ent->index = no_tbllong_entries++;
+            }
 
+            // Update the entries in TBLlong correspoing to this more
+            // specific route
             tmp = (uint8_t)dst_net_cpu_bo;
             for(
-                index = tbl24_ent->index + tmp;
-                index <= (uint8_t)(
-                        tbl24_ent->index
-                        + ((uint8_t)(0xFF & ~netmask_cpu_bo))
-                        + tmp);
+                index = (tbl24_ent->index * 256) + tmp;
+                index <= (tbl24_ent->index * 256)
+                        + (0xFF & ~netmask_cpu_bo)
+                        + tmp;
                 ++index
             ) {
                 // Override the entries we now know a more specific route
                 tbllong[index].index = route_it->hop_id;
             }
-
-            no_tbllong_entries++;
         }
     }
 
@@ -272,7 +282,7 @@ void build_routing_table(void)
 }
 
 
-/*
+/**
  * /brief Allocate the next hops specified in all routes to next hop IDs used
  *          in the DIR-24-8 structure.
  * 
@@ -292,12 +302,16 @@ void build_routing_table(void)
 static int alloc_hop_ids(void)
 {
     tmp_route_t *it = tmp_route_list, *prf_it = tmp_route_list;
-    uint nxt_hop_id = 1; // 0 is used as special 'no next hop' value
     rt_entry_t *tmp_ptr = NULL;
 
+    no_nxt_hops = 1; // 0 is used as special 'no next hop' value
+
     // Allocate memory for the nxt_hops_map array
-    no_nxt_hops = INIT_NO_NXT_HOPS;
-    if((nxt_hops_map = malloc(no_nxt_hops * sizeof(rt_entry_t))) == NULL) {
+    curr_size_nxt_hops_tab = INIT_NO_NXT_HOPS;
+    if(
+            (nxt_hops_map = malloc(curr_size_nxt_hops_tab * sizeof(rt_entry_t))) 
+            == NULL
+        ) {
         printf("Not enough memory for the next hops table!\n");
         return ERR_MEM;
     }
@@ -320,16 +334,19 @@ static int alloc_hop_ids(void)
 
         // No next hop matched the one of the current route
         if(it == prf_it) {
-            if(nxt_hop_id >= no_nxt_hops) {
-                no_nxt_hops += INIT_NO_NXT_HOPS;
-                if(no_nxt_hops > 255) {
+            if(no_nxt_hops >= curr_size_nxt_hops_tab) {
+                curr_size_nxt_hops_tab += INIT_NO_NXT_HOPS;
+                if(curr_size_nxt_hops_tab > 255) {
                     printf("To many next hops (>255) cannot be handled by "
                     "DIR-24-8-BASIC. Aborting...\n");
                     return ERR_GEN;
                 }
                 if(
                     (tmp_ptr = 
-                        realloc(nxt_hops_map, INIT_NO_NXT_HOPS * sizeof(rt_entry_t))
+                        realloc(
+                                    nxt_hops_map,
+                                    INIT_NO_NXT_HOPS * sizeof(rt_entry_t)
+                                )
                     ) == NULL
                 ) {
                     printf("Cannot increase the size of the next hops table!\n");
@@ -338,9 +355,9 @@ static int alloc_hop_ids(void)
                 }
             }
             
-            nxt_hops_map[nxt_hop_id].dst_port = it->intf;
-            ether_addr_copy(&it->dst_mac, &nxt_hops_map[nxt_hop_id].dst_mac);
-            it->hop_id = nxt_hop_id++;
+            nxt_hops_map[no_nxt_hops].dst_port = it->intf;
+            ether_addr_copy(&it->dst_mac, &nxt_hops_map[no_nxt_hops].dst_mac);
+            it->hop_id = no_nxt_hops++;
 
             #ifdef VERBOSE
             printf("Added next hop with ID: %d\n", it->hop_id);
@@ -389,7 +406,9 @@ rt_entry_t *get_next_hop(uint32_t dst_ip_cpu_bo)
                     );
         #endif
     } else { // Lookup in TBLlong
-        tbllong_entry = tbllong + (tbl24_entry->index * 256) + ((uint8_t)dst_ip_cpu_bo);
+        tbllong_entry = tbllong +
+                        (tbl24_entry->index * 256) +
+                        ((uint8_t)dst_ip_cpu_bo);
         index = tbllong_entry->index;
 
         #ifdef VERBOSE
@@ -404,4 +423,82 @@ rt_entry_t *get_next_hop(uint32_t dst_ip_cpu_bo)
     if(index == 0)
         return NULL;
     return nxt_hops_map + index;
+}
+
+/**
+ * \brief Print the mapping of egress port to next hop MAC.
+ * 
+ * This fucntion prints the next hop information known to the router to the
+ * command line in the form "Port: <egress_port> <--> Next hop MAC: <MAC>".
+ */
+void print_port_id_to_mac()
+{
+    uint it = 1; // leave out our 'invalid' entry
+    rt_entry_t *entry = NULL;
+
+    if(nxt_hops_map == NULL)
+    {
+        printf("Currently there are no hops in the next hops map. Maybe you"
+                "Have to invoke build_routing_table() before\n");
+                return;
+    }
+
+    for(
+            entry = &nxt_hops_map[it];
+            it < no_nxt_hops;
+            entry = &nxt_hops_map[++it]
+        ) {
+            print_routing_table_entry(entry);
+    }
+}
+
+/**
+ * \brief Print the mapping of next hop ID to the next hop information.
+ * 
+ * The function prints all known next hop IDs and the corresponding next hop
+ * information (egresss port and MAC) to the command line.
+ */
+void print_next_hop_tab()
+{
+    uint it = 1; // Leave out the 'invalid' entry
+    rt_entry_t *entry = NULL;
+
+    printf(
+            "Next hop ID 0: Invalid entry. We use this entry to differentate "
+            "between valid and invalid TBL24 entries for the indicator 0.\n"
+            );
+
+    for(
+            entry = &nxt_hops_map[it];
+            it < no_nxt_hops;
+            entry = &nxt_hops_map[++it]
+        ) {
+            printf("Next hop ID %d:\n\t", it);
+            print_routing_table_entry(entry);
+    }
+}
+
+/**
+ * \brief Print the information contained in one routing table entry.
+ * 
+ * This function prints the information from one routing table entry in the
+ * format: "Port: <egress_port> <--> Next hop MAC: <MAC>\n".
+ * 
+ * ! The final newline is already added by this function.
+ */
+void print_routing_table_entry(rt_entry_t* info)
+{
+    if(info == NULL)
+        return;
+
+    printf(
+        "Port: %d <--> Next hop MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+        info->dst_port,
+        info->dst_mac.addr_bytes[0],
+        info->dst_mac.addr_bytes[1],
+        info->dst_mac.addr_bytes[2],
+        info->dst_mac.addr_bytes[3],
+        info->dst_mac.addr_bytes[4],
+        info->dst_mac.addr_bytes[5]
+    );
 }
