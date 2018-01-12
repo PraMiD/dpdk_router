@@ -60,6 +60,7 @@ typedef struct routing_table_entry rt_entry_t;
  *     Function declarations      *
  **********************************/
 void clean_tmp_routing_table(void);
+void clean_routing_table(void);
 
 /**********************************
  *   Global field declarations    *

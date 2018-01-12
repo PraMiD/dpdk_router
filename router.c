@@ -294,6 +294,8 @@ static int parse_install_route(const char *route)
         return ERR_FORMAT;
     if(((uint8_t)ltmp) != ltmp)
         return ERR_FORMAT;
+    if(cidr_start == tmp)
+        return ERR_FORMAT;
     cidr = (uint8_t)ltmp;
 
     // Parse the MAC address
@@ -305,6 +307,8 @@ static int parse_install_route(const char *route)
     if(*tmp != '\0')
         return ERR_FORMAT;
     if(((uint8_t)ltmp) != ltmp)
+        return ERR_FORMAT;
+    if(intf_start == tmp)
         return ERR_FORMAT;
     intf_id = (uint8_t)ltmp;
 
@@ -350,11 +354,12 @@ static int parse_intf_dev(const char *def)
         return ERR_FORMAT;
     if(((uint8_t)ltmp) != ltmp)
         return ERR_FORMAT;
+    if(def == tmp)
+        return ERR_FORMAT;
     intf = (uint8_t)ltmp;
     if(inet_pton(AF_INET, ip_start, &ip_addr) != 1)
         return ERR_FORMAT;
     
-
     return add_intf_cfg(intf, ip_addr);
 }
 
@@ -450,6 +455,7 @@ void clean_shutdown(void)
     intf_cfg_t *intf_nxt = NULL, *intf_it = intf_cfgs;
 
     clean_tmp_routing_table();
+    clean_routing_table();
     while(intf_it != NULL) {
         intf_nxt = intf_it->nxt;
         free(intf_it);

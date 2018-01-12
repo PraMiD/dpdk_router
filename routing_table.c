@@ -119,6 +119,24 @@ void clean_tmp_routing_table(void)
 }
 
 /*
+ * \brief Clear the Dir-24-8 routing structure.
+ * 
+ * The method is used to cleanup the Dir-24-8 routing structure and the list of
+ * next hops on a shutdown.
+ */
+void clean_routing_table(void)
+{
+    if(tbl24 != NULL)
+        free(tbl24);
+
+    if(tbllong != NULL)
+        free(tbllong);
+
+    if(nxt_hops_map != NULL)
+        free(nxt_hops_map);
+}
+
+/*
  * /brief Build the Dir-24-8 routing table structure.
  * 
  * This function allocates memory for the TBL24 and TBLlong.
@@ -333,11 +351,30 @@ static int alloc_hop_ids(void)
     return 0;
 }
 
+/**
+ * \brief Get a routing decision from the Dir-24-8 structure.
+ * 
+ * This function preforms the lookup of an given IPv4 address in cpu endianness
+ * (little endian) and returns the matching rt_entry_t which contains the 
+ * egress port and MAC address of the next hop.
+ * 
+ * \param dst_ip_cpu_bo The destination IP in CPU byte order (little endian)
+ * 
+ * \return The rt_entry_t* of the next hop or NULL if there is no routing table
+ *          entry for this IP address or the Dir-24-8 structure is not
+ *          initialized.
+ */
 rt_entry_t *get_next_hop(uint32_t dst_ip_cpu_bo)
 {
     tbl24_entry_t *tbl24_entry=NULL;
     tbllong_entry_t *tbllong_entry=NULL;
     uint index = 0;
+
+    if(tbl24 == NULL && tbllong == NULL) {
+        printf("Cannot get any routing decision as the Dir-24-8 structure"
+        "is not build. Call build_routing_table() before!");
+        return NULL;
+    }
 
     tbl24_entry = &tbl24[dst_ip_cpu_bo >> 8];
     if(tbl24_entry->indicator == 0) { // TBL24 valid
