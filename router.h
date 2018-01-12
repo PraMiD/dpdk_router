@@ -1,6 +1,7 @@
 #ifndef ROUTER_H__
 #define ROUTER_H__
 #include <rte_ether.h>
+#include <rte_ip.h>
 
 #include <stdint.h>
 #include <unistd.h>

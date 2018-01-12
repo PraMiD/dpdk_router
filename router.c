@@ -18,6 +18,7 @@
 #include "router.h"
 #include "dpdk_init.h"
 #include "routing_table.h"
+#include "routing_table_additional.h"
 #include "ethernet_stack.h"
 #include "routing_table.h"
 #include "global.h"
@@ -94,10 +95,8 @@ int start_router()
         return ERR_GEN;
     }
 
-    if(build_routing_table() < 0) {
-        printf("Could not create Dir-24-8 table! Stopping...\n");
-        return ERR_GEN;
-    }
+    // There might occur an error
+    build_routing_table();
 
     printf("Starting to serve on %d interfaces!\n", no_intf);
 
@@ -309,7 +308,7 @@ static int parse_install_route(const char *route)
         return ERR_FORMAT;
     intf_id = (uint8_t)ltmp;
 
-    add_route(net_addr, cidr, &mac_addr, intf_id);
+    add_route(rte_be_to_cpu_32(net_addr), cidr, &mac_addr, intf_id);
     return 0;
 }
 

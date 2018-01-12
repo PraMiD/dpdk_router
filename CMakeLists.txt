@@ -18,7 +18,7 @@ LINK_DIRECTORIES(
 
 # router
 SET(PRJ router)
-SET(SOURCES dpdk_init.c router.c routing_table.c ethernet_stack.c arp_stack.c ipv4_stack.c dummy_routing_table.c)
+SET(SOURCES dpdk_init.c router.c routing_table.c ethernet_stack.c arp_stack.c ipv4_stack.c)
 ADD_EXECUTABLE(${PRJ} ${SOURCES} main.c)
 TARGET_LINK_LIBRARIES(${PRJ} ${LINKER_OPTS})
 
@@ -26,4 +26,11 @@ TARGET_LINK_LIBRARIES(${PRJ} ${LINKER_OPTS})
 SET(PRJ fwd)
 ADD_EXECUTABLE(${PRJ} dpdk_init.c forwarder/fwd.c)
 TARGET_LINK_LIBRARIES(${PRJ} ${LINKER_OPTS})
+
+# test
+SET(PRJ-TEST table-test)
+find_package(GTest REQUIRED)
+include_directories(${GTEST_INCLUDE_DIRS})
+ADD_EXECUTABLE(${PRJ-TEST} ${SOURCES} test/test.cc)
+TARGET_LINK_LIBRARIES(${PRJ-TEST} -Wl,--start-group ${DPDK_LIBS} ${GTEST_LIBRARIES} -Wl,--end-group pthread dl rt)
 

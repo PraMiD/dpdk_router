@@ -17,5 +17,5 @@
 #define ERR_TTL_EXP -10
 #define ERR_NO_ROUTE -11
 
-#define VERBOSE
+
 #endif

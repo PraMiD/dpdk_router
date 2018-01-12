@@ -18,4 +18,5 @@ static inline uint32_t recv_from_device(uint8_t port_id, uint16_t num_rx_queues,
 	return rx;
 }
 
+
 #endif

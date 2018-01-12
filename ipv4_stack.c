@@ -8,6 +8,7 @@
 #include "router.h"
 #include "ethernet_stack.h"
 #include "routing_table.h"
+#include "routing_table_additional.h"
 #include "global.h"
 
 /*********************************
@@ -16,7 +17,6 @@
 static int basic_chks(const void *pkt, uint16_t len);
 static int lookup_and_fwd(intf_cfg_t *cfg, struct rte_mbuf *mbuf, 
                                 const void *pkt);
-static rt_entry_t *lookup(uint32_t dst_ip_be);
 
 
 /*********************************
@@ -186,44 +186,18 @@ static int basic_chks(const void *pkt, uint16_t len)
 static int lookup_and_fwd(intf_cfg_t *cfg, struct rte_mbuf *mbuf, 
                             const void *pkt)
 {
-    uint32_t dst_addr = ((struct ipv4_hdr *)pkt)->dst_addr;
+    uint32_t dst_addr_be = ((struct ipv4_hdr *)pkt)->dst_addr;
 
-    rt_entry_t *entry = lookup(dst_addr);
+    rt_entry_t *entry = get_next_hop(rte_be_to_cpu_32(dst_addr_be));
 
     if(entry == NULL) { // No entry found..
         #ifdef VERBOSE
         printf("Cannot get routing table entry for ip address: %d.%d.%d.%d\n",
-                    (uint8_t)dst_addr, (uint8_t)(dst_addr >> 8),
-                    (uint8_t)(dst_addr >> 16), (uint8_t)(dst_addr >> 24));
+                    (uint8_t)dst_addr_be, (uint8_t)(dst_addr_be >> 8),
+                    (uint8_t)(dst_addr_be >> 16), (uint8_t)(dst_addr_be >> 24));
         #endif
         drop_pkt(mbuf);
         return ERR_NO_ROUTE;
     }
     return send_frame(cfg, mbuf, entry->dst_port, &entry->dst_mac);
-}
-
-static rt_entry_t *lookup(uint32_t dst_ip_be)
-{
-    tbl24_entry_t *tbl24_entry=NULL;
-    tbllong_entry_t *tbllong_entry=NULL;
-
-    uint32_t dst_ip_cpu_bo = rte_be_to_cpu_32(dst_ip_be);
-    tbl24_entry = &tbl24[dst_ip_cpu_bo >> 8];
-
-    uint index = 0;
-
-    if(tbl24_entry->indicator == 0) { // TBL24 valid
-        // This entry is NULL if the index is '0' -> No route to host
-        printf("Index: %d\n", tbl24_entry->index);
-        index = tbl24_entry->index;
-    } else { // Lookup in TBLlong
-        tbllong_entry = tbllong + (tbl24_entry->index * 256);
-
-        printf("Index for next hops: %d\n", tbllong_entry->index);
-        index = tbllong_entry->index;
-    }
-
-    if(index == 0)
-        return NULL;
-    return nxt_hops_map + index;
 }
